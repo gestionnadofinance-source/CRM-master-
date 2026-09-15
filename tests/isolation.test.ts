@@ -80,9 +80,7 @@ describe("CRM isolation", () => {
   let globalAdmin: User;
   let clientA: Client;
   let clientB: Client;
-  let prospectA: Prospect;
   let prospectB: Prospect;
-  let appointmentA: Appointment;
   let appointmentB: Appointment;
   let quoteA: Quote;
   let quoteB: Quote;
@@ -129,7 +127,11 @@ describe("CRM isolation", () => {
       data: { crmId: crmB.id, company: "__TEST__ Client B", ownerId: userB.id },
     });
 
-    prospectA = await prisma.prospect.create({
+    // Les pendants côté CRM A ne sont jamais référencés par un test : ils
+    // existent pour que les requêtes scopées au CRM B soient probantes. Sans
+    // eux, un résultat vide ne prouverait rien — la table serait simplement
+    // vide, au lieu de contenir des données d'un autre CRM qui ne fuitent pas.
+    await prisma.prospect.create({
       data: { crmId: crmA.id, company: "__TEST__ Prospect A", ownerId: userA.id },
     });
     prospectB = await prisma.prospect.create({
@@ -138,7 +140,7 @@ describe("CRM isolation", () => {
 
     const now = new Date();
     const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-    appointmentA = await prisma.appointment.create({
+    await prisma.appointment.create({
       data: {
         crmId: crmA.id,
         title: "__TEST__ RDV A",
