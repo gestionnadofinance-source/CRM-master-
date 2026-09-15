@@ -127,6 +127,7 @@ Voir `.env.example` pour la liste complète et commentée. Résumé :
 | Variable | Obligatoire | Rôle |
 |---|---|---|
 | `DATABASE_URL` | oui | Connexion PostgreSQL |
+| `DIRECT_URL` | non | Connexion directe (non poolée) utilisée par Prisma Migrate. Facultative si une intégration gérée expose déjà cette connexion (`DATABASE_URL_UNPOOLED` chez Neon, `POSTGRES_URL_NON_POOLING` chez Vercel Postgres/Supabase) : `scripts/vercel-migrate.sh` s'y replie, puis sur `DATABASE_URL` |
 | `APP_URL` | recommandé | URL publique (emails, lien de réservation) |
 | `SMTP_*` | non | Envoi réel des emails (bienvenue, feuilles de pointage). Sans configuration : emails journalisés côté serveur, l'application reste utilisable — les identifiants restent de toute façon gérés par un administrateur (voir Authentification et sécurité) |
 | `PUSHER_*` / `NEXT_PUBLIC_PUSHER_*` | non | Temps réel. Sans configuration : repli automatique par rafraîchissement |
