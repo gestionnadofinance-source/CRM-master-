@@ -42,9 +42,30 @@ export async function requireCrmAccess(
   permission?: Permission
 ): Promise<TenantContext> {
   const crm = await prisma.crm.findUnique({ where: { id: crmId } });
+  return authorizeCrm(ctx, crm, permission);
+}
+
+/**
+ * Cœur de la vérification, à partir d'un CRM déjà chargé.
+ *
+ * Existe pour que requireCrmAccessBySlug n'ait pas à relire le même
+ * enregistrement une seconde fois : il le chargeait par slug, puis déléguait à
+ * requireCrmAccess qui le rechargeait aussitôt par id. Un aller-retour inutile
+ * vers la base sur chaque page d'un CRM — négligeable en local, sensible dès
+ * que la base est distante de l'exécution.
+ *
+ * Les contrôles eux-mêmes sont inchangés et restent groupés ici, en un seul
+ * endroit : CRM existant et actif, accès de l'utilisateur, permission requise.
+ */
+async function authorizeCrm(
+  ctx: AuthContext,
+  crm: { id: string; slug: string; name: string; isActive: boolean } | null,
+  permission?: Permission
+): Promise<TenantContext> {
   if (!crm || !crm.isActive) {
     throw new AuthError("CRM_ACCESS_DENIED", "Ce CRM est introuvable ou désactivé.");
   }
+  const crmId = crm.id;
 
   let access: AccessSummary;
   if (ctx.user.isGlobalAdmin) {
@@ -80,10 +101,7 @@ export async function requireCrmAccessBySlug(
   permission?: Permission
 ): Promise<TenantContext> {
   const crm = await prisma.crm.findUnique({ where: { slug: crmSlug } });
-  if (!crm || !crm.isActive) {
-    throw new AuthError("CRM_ACCESS_DENIED", "Ce CRM est introuvable ou désactivé.");
-  }
-  return requireCrmAccess(ctx, crm.id, permission);
+  return authorizeCrm(ctx, crm, permission);
 }
 
 /**
