@@ -11,6 +11,36 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+/**
+ * Lit une variable d'environnement optionnelle en traitant une valeur vide
+ * comme une absence.
+ *
+ * `process.env.X ?? défaut` ne se replie que sur `undefined`. Or un tableau de
+ * bord d'hébergeur (Vercel, Railway...) enregistre une variable déclarée mais
+ * laissée vide comme une chaîne vide, qui traverse `??` sans déclencher le
+ * défaut. Un ADMIN_EMAIL vide créait ainsi l'administrateur global avec une
+ * adresse vide : compte impossible à utiliser, aucun message d'erreur, et que
+ * le seed ne corrige jamais de lui-même puisqu'il ne recrée pas un
+ * administrateur quand il en existe déjà un (voir plus bas). Même logique que
+ * normalizeEnv() dans src/lib/env.ts, réimplémentée ici pour garder ce script
+ * sans dépendance au code applicatif.
+ */
+function envOrDefault(name: string, fallback: string): string {
+  const value = process.env[name]?.trim();
+  return value ? value : fallback;
+}
+
+/**
+ * Toutes les autres portes d'entrée normalisent l'email avant de lire ou
+ * d'écrire un compte — connexion (src/server/auth/actions.ts), création
+ * d'utilisateur (src/server/admin/actions.ts, src/server/crm-users/actions.ts).
+ * Sans cette normalisation ici, un ADMIN_EMAIL saisi avec des majuscules
+ * créerait un compte que la connexion, elle, ne retrouverait jamais.
+ */
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 const DEFAULT_STAGES = [
   { name: "Nouveau prospect", order: 0, color: "#94a3b8" },
   { name: "Contact établi", order: 1, color: "#60a5fa" },
@@ -109,10 +139,10 @@ async function main() {
     console.log(`  ✓ CRM prêt : ${crmDef.name}`);
   }
 
-  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@crm-master.local";
-  const adminFirstName = process.env.ADMIN_FIRST_NAME ?? "Super";
-  const adminLastName = process.env.ADMIN_LAST_NAME ?? "Admin";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "ChangeMoi123!";
+  const adminEmail = normalizeEmail(envOrDefault("ADMIN_EMAIL", "admin@crm-master.local"));
+  const adminFirstName = envOrDefault("ADMIN_FIRST_NAME", "Super");
+  const adminLastName = envOrDefault("ADMIN_LAST_NAME", "Admin");
+  const adminPassword = envOrDefault("ADMIN_PASSWORD", "ChangeMoi123!");
 
   // Cherche un admin existant par email OU par le simple fait qu'un
   // administrateur global existe déjà (ex. après un renommage d'email) —
