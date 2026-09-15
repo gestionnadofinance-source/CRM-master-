@@ -1,0 +1,1421 @@
+// CRM Master — schema de données
+// Règle fondamentale : toute table métier porte un crmId et TOUTE requête
+// applicative doit filtrer par ce crmId (voir src/server/tenant.ts).
+// Le schéma n'impose pas l'isolation à lui seul : elle est garantie par la
+// couche serveur (src/server/*), jamais par l'UI.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Connexion directe (non poolée) utilisée uniquement par Prisma Migrate.
+  // Nécessaire avec les fournisseurs qui exposent DATABASE_URL derrière un
+  // pooler PgBouncer en mode transaction (ex. Neon) : ce mode ne supporte
+  // pas les verrous consultatifs que Migrate utilise pour éviter les
+  // migrations concurrentes. Sans pooler, DIRECT_URL peut simplement
+  // pointer vers la même valeur que DATABASE_URL.
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================================
+// IDENTITÉ, AUTHENTIFICATION, SÉCURITÉ
+// ============================================================================
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum Presence {
+  ONLINE
+  AWAY
+  OFFLINE
+}
+
+enum ThemePreference {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  firstName          String
+  lastName           String
+  email              String          @unique
+  passwordHash       String
+  mustChangePassword Boolean         @default(true)
+  isGlobalAdmin      Boolean         @default(false)
+  status             UserStatus      @default(ACTIVE)
+  color              String          @default("#3b6bf5")
+  avatarUrl          String?
+  signatureText      String?
+  signatureImageUrl  String?
+  presence           Presence        @default(OFFLINE)
+  lastActiveAt       DateTime?
+  theme              ThemePreference @default(SYSTEM)
+  notifyByEmail      Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  disabledAt         DateTime?
+  createdById        String?
+
+  createdBy    User?  @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers User[] @relation("UserCreatedBy")
+
+  crmAccess              UserCrmAccess[]
+  sessions               Session[]
+  ownedClients           Client[]                   @relation("ClientOwner")
+  clientCollabs          ClientCollaborator[]
+  ownedProspects         Prospect[]                 @relation("ProspectOwner")
+  ownedOpportunities     Opportunity[]              @relation("OpportunityOwner")
+  ownedAppointments      Appointment[]              @relation("AppointmentOwner")
+  appointmentInvites     AppointmentParticipant[]
+  assignedTasks          Task[]                     @relation("TaskAssignee")
+  createdTasks           Task[]                     @relation("TaskCreatedBy")
+  availabilityRules      AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  createdQuotes          Quote[]                    @relation("QuoteCreatedBy")
+  quoteVersions          QuoteVersion[]
+  uploadedDocuments      Document[]
+  createdThreads         MessageThread[]
+  threadParticipants     MessageThreadParticipant[]
+  messages               Message[]
+  notifications          Notification[]             @relation("NotificationRecipient")
+  triggeredNotifications Notification[]             @relation("NotificationActor")
+  objectives             CommercialObjective[]
+  activityLogs           ActivityLog[]
+  tags                   UserTag[]
+  createdChantiers       Chantier[]                 @relation("ChantierCreatedBy")
+  chantierAssignments    ChantierAssignment[]       @relation("ChantierAssignments")
+  vaultDocuments         VaultDocument[]            @relation("VaultDocumentOwner")
+  uploadedVaultDocuments VaultDocument[]            @relation("VaultDocumentUploadedBy")
+  foremanVaultDocuments  VaultDocument[]            @relation("VaultDocumentForeman")
+  vaultFolders           VaultFolder[]              @relation("VaultFolderOwner")
+  createdVaultFolders    VaultFolder[]              @relation("VaultFolderCreatedBy")
+  pointagesAsEmployee    Pointage[]                 @relation("PointageEmployee")
+  pointagesAsForeman     Pointage[]                 @relation("PointageForeman")
+  createdApiKeys         ApiKey[]                   @relation("ApiKeyCreatedBy")
+
+  @@index([email])
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  userAgent  String?
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ipAddress String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+}
+
+/**
+ * Limitation de fréquence générique par IP pour les points d'entrée publics
+ * non authentifiés (ex. réservation en ligne — voir src/lib/rate-limit.ts),
+ * sur le même principe que LoginAttempt sans être spécifique aux
+ * identifiants de connexion.
+ */
+model RateLimitHit {
+  id         String   @id @default(cuid())
+  scope      String
+  identifier String
+  createdAt  DateTime @default(now())
+
+  @@index([scope, identifier, createdAt])
+}
+
+// ============================================================================
+// CRM (TENANT) — chaque CRM est un espace strictement isolé
+// ============================================================================
+
+model Crm {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  icon        String   @default("building")
+  color       String   @default("#3b6bf5")
+  isActive    Boolean  @default(true)
+  isDemo      Boolean  @default(false)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userAccess             UserCrmAccess[]
+  companySettings        CompanySettings?
+  pointageSettings       CrmPointageSettings?
+  bookingSettings        BookingSettings?
+  pipelineStages         PipelineStage[]
+  sources                Source[]
+  tags                   Tag[]
+  customFieldDefs        CustomFieldDefinition[]
+  vatRates               VatRate[]
+  quoteTemplates         QuoteTemplate[]
+  emailTemplates         EmailTemplate[]
+  automationRules        AutomationRule[]
+  clients                Client[]
+  prospects              Prospect[]
+  opportunities          Opportunity[]
+  appointments           Appointment[]
+  availabilityRules      AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  tasks                  Task[]
+  quotes                 Quote[]
+  quoteCounters          QuoteCounter[]
+  documents              Document[]
+  messageThreads         MessageThread[]
+  messages               Message[]
+  notifications          Notification[]
+  activityLogs           ActivityLog[]
+  objectives             CommercialObjective[]
+  customFieldValues      CustomFieldValue[]
+  chantiers              Chantier[]
+  vaultDocuments         VaultDocument[]
+  vaultFolders           VaultFolder[]
+  pointages              Pointage[]
+
+  @@index([slug])
+}
+
+enum CrmRole {
+  MANAGER // Responsable CRM
+  USER // Utilisateur
+}
+
+enum Permission {
+  VIEW
+  CREATE
+  EDIT
+  DELETE
+  EXPORT
+  MANAGE_APPOINTMENTS
+  MANAGE_QUOTES
+  MANAGE_PROSPECTS
+  MANAGE_CLIENTS
+  MANAGE_SETTINGS
+  MANAGE_USERS
+}
+
+// Catégorie d'accès d'un utilisateur pour un CRM donné : détermine quels
+// onglets/fonctions sont visibles, indépendamment du rôle (MANAGER/USER)
+// qui ne joue que sur le niveau de permission au sein de la catégorie
+// COMMERCIAL. Un OUVRIER n'a par défaut aucune permission commerciale
+// (voir src/server/permissions.ts effectivePermissions) : seuls Planning
+// et Coffre-fort lui sont accessibles, appliqué à la fois côté navigation
+// (src/lib/nav.ts) et côté serveur (src/app/c/[crmSlug]/layout.tsx).
+// SECRETAIRE n'a, comme OUVRIER, aucune permission commerciale par défaut,
+// mais a accès en plus à Tableau de bord, Utilisateurs (gestion des accès
+// de CE CRM), Planning, Pointage salariés/client, Coffre-fort et Activité —
+// jamais à Pipeline/Agenda/Clients/Prospects/Devis/Tâches/Messagerie/
+// Paramètres CRM (données commerciales), voir canManageOperations dans
+// src/server/tenant.ts.
+enum AccessCategory {
+  COMMERCIAL
+  OUVRIER
+  SECRETAIRE
+}
+
+// Défaut de permissions accordées automatiquement par rôle : voir
+// src/server/permissions.ts — cette table permet des dérogations fines.
+model UserCrmAccess {
+  id          String         @id @default(cuid())
+  userId      String
+  crmId       String
+  role        CrmRole        @default(USER)
+  category    AccessCategory @default(COMMERCIAL)
+  permissions Permission[]
+  grantedAt   DateTime       @default(now())
+  grantedById String?
+
+  // Profil "chef de chantier" (catégorie OUVRIER uniquement) : géré comme
+  // un profil de la personne elle-même, pas comme un rôle propre à chaque
+  // chantier — un chef de chantier gère la feuille de pointage de tout
+  // chantier auquel il est affecté (voir ChantierAssignment). Choisi à la
+  // création/l'édition de l'utilisateur (src/app/admin/users), déclenche
+  // l'accès aux onglets Pointage salariés/client (src/server/pointage/actions.ts
+  // amIForeman/requireForeman).
+  isForeman Boolean @default(false)
+
+  // Montants par défaut des primes de pointage (catégorie OUVRIER
+  // uniquement) : pré-remplis automatiquement par le chef de chantier lors
+  // de la saisie d'une feuille de pointage salarié, mais reste modifiable
+  // au cas par cas. Voir src/server/pointage. (Les primes management/zone/
+  // masque/poste sont fixées par chantier, pas par salarié — voir
+  // ChantierFixedAmounts dans src/server/pointage/calc.ts — donc absentes ici.)
+  defaultHousingAllowance Decimal @default(0) @db.Decimal(8, 2)
+  defaultDirtAllowance    Decimal @default(5) @db.Decimal(8, 2)
+  // Taux horaire de base du salarié, servant à calculer la majoration de
+  // nuit (voir Pointage.hourlyRate/nightRatePercent et
+  // src/server/pointage/calc.ts) : nuit = heures de nuit × taux horaire ×
+  // % de majoration.
+  defaultHourlyRate Decimal @default(0) @db.Decimal(8, 2)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  crm  Crm  @relation(fields: [crmId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, crmId])
+  @@index([crmId])
+}
+
+model CompanySettings {
+  id                        String   @id @default(cuid())
+  crmId                     String   @unique
+  crm                       Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  legalName                 String   @default("")
+  logoUrl                   String?
+  address                   String   @default("")
+  postalCode                String   @default("")
+  city                      String   @default("")
+  siret                     String   @default("")
+  phone                     String   @default("")
+  email                     String   @default("")
+  website                   String   @default("")
+  legalMentions             String   @default("")
+  // Utilisés pour l'en-tête de l'ordre de mission (voir src/server/mission-order).
+  ape                       String   @default("")
+  urssafOffice              String   @default("")
+  legalRepresentative       String   @default("")
+  missionOrderLegalMentions String   @default("")
+  updatedAt                 DateTime @updatedAt
+}
+
+// Taux commun à tout le CRM pour le calcul automatique des feuilles de
+// pointage (heures de nuit) — voir src/server/pointage. Les indemnités
+// journalières (repas, grand déplacement) sont désormais fixées par
+// chantier (voir Chantier) et les primes individuelles (logement,
+// salissure...) par salarié sur UserCrmAccess.
+model CrmPointageSettings {
+  id        String   @id @default(cuid())
+  crmId     String   @unique
+  crm       Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  // % de majoration nuit par défaut (voir Pointage.nightRatePercent) —
+  // remplace l'ancien taux fixe en euros : la majoration se calcule
+  // maintenant à partir du taux horaire de base du salarié (voir
+  // UserCrmAccess.defaultHourlyRate).
+  nightRatePercent Decimal  @default(25) @db.Decimal(5, 2)
+  updatedAt        DateTime @updatedAt
+}
+
+model BookingSettings {
+  id                   String   @id @default(cuid())
+  crmId                String   @unique
+  crm                  Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  publicSlug           String   @unique
+  isEnabled            Boolean  @default(true)
+  slotDurationMinutes  Int      @default(30)
+  bufferMinutes        Int      @default(0)
+  minNoticeHours       Int      @default(24)
+  maxAdvanceDays       Int      @default(60)
+  balancedDistribution Boolean  @default(false)
+  introMessage         String?
+  updatedAt            DateTime @updatedAt
+}
+
+// ============================================================================
+// CONFIGURATION PAR CRM : pipeline, sources, tags, champs personnalisés, TVA
+// ============================================================================
+
+model PipelineStage {
+  id        String   @id @default(cuid())
+  crmId     String
+  crm       Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int
+  color     String   @default("#94a3b8")
+  isWon     Boolean  @default(false)
+  isLost    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  opportunities Opportunity[]
+
+  @@index([crmId])
+}
+
+model Source {
+  id    String @id @default(cuid())
+  crmId String
+  crm   Crm    @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  name  String
+  order Int    @default(0)
+
+  clients   Client[]
+  prospects Prospect[]
+
+  @@unique([crmId, name])
+}
+
+enum TagScope {
+  CLIENT
+  PROSPECT
+  USER
+}
+
+model Tag {
+  id    String   @id @default(cuid())
+  crmId String
+  crm   Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  scope TagScope
+  name  String
+  color String   @default("#94a3b8")
+
+  clientTags   ClientTag[]
+  prospectTags ProspectTag[]
+  userTags     UserTag[]
+
+  @@unique([crmId, scope, name])
+}
+
+enum CustomFieldEntity {
+  CLIENT
+  PROSPECT
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  BOOLEAN
+}
+
+model CustomFieldDefinition {
+  id         String            @id @default(cuid())
+  crmId      String
+  crm        Crm               @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  entityType CustomFieldEntity
+  label      String
+  fieldType  CustomFieldType
+  options    String[]          @default([])
+  required   Boolean           @default(false)
+  order      Int               @default(0)
+
+  values CustomFieldValue[]
+
+  @@index([crmId, entityType])
+}
+
+model CustomFieldValue {
+  id           String                @id @default(cuid())
+  crmId        String
+  crm          Crm                   @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  definitionId String
+  definition   CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  entityType   CustomFieldEntity
+  entityId     String
+  value        String?
+
+  @@unique([definitionId, entityId])
+  @@index([crmId, entityType, entityId])
+}
+
+model VatRate {
+  id        String  @id @default(cuid())
+  crmId     String
+  crm       Crm     @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  label     String
+  rate      Decimal @db.Decimal(5, 2)
+  isDefault Boolean @default(false)
+
+  quoteItems QuoteItem[]
+
+  @@unique([crmId, label])
+}
+
+// ============================================================================
+// CLIENTS & PROSPECTS
+// ============================================================================
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Client {
+  id              String       @id @default(cuid())
+  crmId           String
+  crm             Crm          @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  company         String
+  sector          String?
+  firstName       String?
+  lastName        String?
+  phone           String?
+  email           String?
+  address         String?
+  activity        String?
+  size            String?
+  siret           String?
+  status          ClientStatus @default(ACTIVE)
+  notes           String?
+  sourceId        String?
+  source          Source?      @relation(fields: [sourceId], references: [id])
+  ownerId         String
+  owner           User         @relation("ClientOwner", fields: [ownerId], references: [id])
+  commercialValue Decimal?     @db.Decimal(12, 2)
+  revenue         Decimal?     @db.Decimal(12, 2)
+  lastContactAt   DateTime?
+  nextContactAt   DateTime?
+  convertedFromId String?      @unique
+  convertedFrom   Prospect?    @relation("ProspectConversion", fields: [convertedFromId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  contacts      ClientContact[]
+  collaborators ClientCollaborator[]
+  tags          ClientTag[]
+  opportunities Opportunity[]
+  appointments  Appointment[]
+  tasks         Task[]
+  quotes        Quote[]
+  documents     Document[]
+  activityLogs  ActivityLog[]
+
+  @@index([crmId, status])
+  @@index([crmId, ownerId])
+  @@index([crmId, siret])
+}
+
+model ClientContact {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  firstName String
+  lastName  String
+  role      String?
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+}
+
+model ClientCollaborator {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, userId])
+}
+
+model ClientTag {
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tagId    String
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([clientId, tagId])
+}
+
+model UserTag {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tagId])
+}
+
+enum ProspectStatus {
+  HOT
+  COLD
+  TO_FOLLOW_UP
+  CONVERTED
+  LOST
+}
+
+model Prospect {
+  id              String         @id @default(cuid())
+  crmId           String
+  crm             Crm            @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  company         String
+  firstName       String?
+  lastName        String?
+  phone           String?
+  email           String?
+  address         String?
+  siret           String?
+  sector          String?
+  activity        String?
+  size            String?
+  sourceId        String?
+  source          Source?        @relation(fields: [sourceId], references: [id])
+  ownerId         String
+  owner           User           @relation("ProspectOwner", fields: [ownerId], references: [id])
+  status          ProspectStatus @default(TO_FOLLOW_UP)
+  score           Int            @default(0)
+  scoreBreakdown  Json?
+  potentialAmount Decimal?       @db.Decimal(12, 2)
+  notes           String?
+  lastContactAt   DateTime?
+  nextContactAt   DateTime?
+  lostReason      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  contacts      ProspectContact[]
+  tags          ProspectTag[]
+  opportunities Opportunity[]
+  appointments  Appointment[]
+  tasks         Task[]
+  quotes        Quote[]
+  documents     Document[]
+  activityLogs  ActivityLog[]
+  convertedTo   Client?           @relation("ProspectConversion")
+
+  @@index([crmId, status])
+  @@index([crmId, ownerId])
+  @@index([crmId, siret])
+}
+
+model ProspectContact {
+  id         String   @id @default(cuid())
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  firstName  String
+  lastName   String
+  role       String?
+  phone      String?
+  email      String?
+  createdAt  DateTime @default(now())
+}
+
+model ProspectTag {
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  tagId      String
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([prospectId, tagId])
+}
+
+// ============================================================================
+// PIPELINE COMMERCIAL
+// ============================================================================
+
+model Opportunity {
+  id             String        @id @default(cuid())
+  crmId          String
+  crm            Crm           @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  stageId        String
+  stage          PipelineStage @relation(fields: [stageId], references: [id])
+  clientId       String?
+  client         Client?       @relation(fields: [clientId], references: [id])
+  prospectId     String?
+  prospect       Prospect?     @relation(fields: [prospectId], references: [id])
+  title          String
+  amount         Decimal?      @db.Decimal(12, 2)
+  ownerId        String
+  owner          User          @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  position       Int           @default(0)
+  nextAction     String?
+  lastActivityAt DateTime      @default(now())
+  wonAt          DateTime?
+  lostAt         DateTime?
+  lostReason     String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  history OpportunityHistory[]
+
+  @@index([crmId, stageId])
+}
+
+model OpportunityHistory {
+  id            String      @id @default(cuid())
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fromStageId   String?
+  toStageId     String
+  movedById     String
+  createdAt     DateTime    @default(now())
+}
+
+// ============================================================================
+// AGENDA & RÉSERVATION
+// ============================================================================
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Appointment {
+  id                  String            @id @default(cuid())
+  crmId               String
+  crm                 Crm               @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  title               String
+  clientId            String?
+  client              Client?           @relation(fields: [clientId], references: [id])
+  prospectId          String?
+  prospect            Prospect?         @relation(fields: [prospectId], references: [id])
+  ownerId             String
+  owner               User              @relation("AppointmentOwner", fields: [ownerId], references: [id])
+  startAt             DateTime
+  endAt               DateTime
+  location            String?
+  phone               String?
+  email               String?
+  notes               String?
+  status              AppointmentStatus @default(SCHEDULED)
+  isPublicBooking     Boolean           @default(false)
+  bookingContactName  String?
+  bookingContactEmail String?
+  bookingContactPhone String?
+  bookingMessage      String?
+
+  reportSummary    String?
+  reportNeeds      String?
+  reportBudget     String?
+  reportNextStep   String?
+  reportFollowUpAt DateTime?
+  reportNotes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants AppointmentParticipant[]
+  tasks        Task[]
+  documents    Document[]
+  activityLogs ActivityLog[]
+
+  @@index([crmId, ownerId, startAt])
+  @@index([crmId, startAt])
+}
+
+model AppointmentParticipant {
+  id            String      @id @default(cuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([appointmentId, userId])
+}
+
+model AvailabilityRule {
+  id        String @id @default(cuid())
+  crmId     String
+  crm       Crm    @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekday   Int // 0 = lundi ... 6 = dimanche
+  startTime String // "09:00"
+  endTime   String // "12:00"
+
+  @@index([crmId, userId, weekday])
+}
+
+enum AvailabilityExceptionType {
+  LEAVE
+  HOLIDAY
+  UNAVAILABLE
+  BLOCKED
+}
+
+model AvailabilityException {
+  id        String                    @id @default(cuid())
+  crmId     String
+  crm       Crm                       @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AvailabilityExceptionType
+  startAt   DateTime
+  endAt     DateTime
+  allDay    Boolean                   @default(true)
+  reason    String?
+  createdAt DateTime                  @default(now())
+
+  @@index([crmId, userId, startAt])
+}
+
+// ============================================================================
+// TÂCHES
+// ============================================================================
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model Task {
+  id            String       @id @default(cuid())
+  crmId         String
+  crm           Crm          @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  assigneeId    String
+  assignee      User         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  clientId      String?
+  client        Client?      @relation(fields: [clientId], references: [id])
+  prospectId    String?
+  prospect      Prospect?    @relation(fields: [prospectId], references: [id])
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id])
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  priority      TaskPriority @default(NORMAL)
+  status        TaskStatus   @default(TODO)
+  dueAt         DateTime?
+  createdById   String
+  createdBy     User         @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  isAutomated   Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  completedAt   DateTime?
+
+  @@index([crmId, assigneeId, status])
+  @@index([crmId, dueAt])
+}
+
+// ============================================================================
+// DEVIS
+// ============================================================================
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  FOLLOWED_UP
+  ACCEPTED
+  REFUSED
+  EXPIRED
+}
+
+model QuoteCounter {
+  id         String @id @default(cuid())
+  crmId      String
+  crm        Crm    @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  prefix     String
+  year       Int
+  lastNumber Int    @default(0)
+
+  @@unique([crmId, prefix, year])
+}
+
+model Quote {
+  id             String      @id @default(cuid())
+  crmId          String
+  crm            Crm         @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  number         String
+  clientId       String?
+  client         Client?     @relation(fields: [clientId], references: [id])
+  object         String
+  siretSnapshot  String?
+  issueDate      DateTime    @default(now())
+  validUntil     DateTime
+  status         QuoteStatus @default(DRAFT)
+  conditions     String?
+  mentions       String?
+  totalHt        Decimal     @default(0) @db.Decimal(12, 2)
+  totalVat       Decimal     @default(0) @db.Decimal(12, 2)
+  totalTtc       Decimal     @default(0) @db.Decimal(12, 2)
+  currentVersion Int         @default(1)
+  createdById    String
+  createdBy      User        @relation("QuoteCreatedBy", fields: [createdById], references: [id])
+  signedById     String?
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  refusedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  items        QuoteItem[]
+  versions     QuoteVersion[]
+  tasks        Task[]
+  documents    Document[]
+  activityLogs ActivityLog[]
+  prospect     Prospect?      @relation(fields: [prospectId], references: [id])
+  prospectId   String?
+
+  @@unique([crmId, number])
+  @@index([crmId, status])
+  @@index([crmId, clientId])
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  designation String
+  quantity    Decimal @db.Decimal(10, 2)
+  unitPriceHt Decimal @db.Decimal(12, 2)
+  vatRateId   String
+  vatRate     VatRate @relation(fields: [vatRateId], references: [id])
+  order       Int     @default(0)
+}
+
+model QuoteVersion {
+  id            String   @id @default(cuid())
+  quoteId       String
+  quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  snapshot      Json
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id])
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@unique([quoteId, versionNumber])
+}
+
+model QuoteTemplate {
+  id           String   @id @default(cuid())
+  crmId        String
+  crm          Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  name         String
+  logoUrl      String?
+  primaryColor String   @default("#3b6bf5")
+  mentions     String?
+  conditions   String?
+  footer       String?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([crmId])
+}
+
+// ============================================================================
+// DOCUMENTS
+// ============================================================================
+
+enum DocumentEntity {
+  CLIENT
+  PROSPECT
+  QUOTE
+  APPOINTMENT
+  MESSAGE
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  crmId        String
+  crm          Crm            @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  fileName     String
+  mimeType     String
+  size         Int
+  storageKey   String
+  entityType   DocumentEntity
+  entityId     String
+  uploadedById String
+  uploadedBy   User           @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime       @default(now())
+
+  clientId      String?
+  client        Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  prospectId    String?
+  prospect      Prospect?    @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  messageAttachments MessageAttachment[]
+
+  @@index([crmId, entityType, entityId])
+}
+
+// ============================================================================
+// MESSAGERIE INTERNE (isolée par CRM)
+// ============================================================================
+
+enum ThreadType {
+  DIRECT
+  GROUP
+}
+
+model MessageThread {
+  id          String     @id @default(cuid())
+  crmId       String
+  crm         Crm        @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  type        ThreadType
+  name        String?
+  createdById String
+  createdBy   User       @relation(fields: [createdById], references: [id])
+  createdAt   DateTime   @default(now())
+
+  participants MessageThreadParticipant[]
+  messages     Message[]
+
+  @@index([crmId])
+}
+
+model MessageThreadParticipant {
+  id         String        @id @default(cuid())
+  threadId   String
+  thread     MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime?
+  joinedAt   DateTime      @default(now())
+
+  @@unique([threadId, userId])
+}
+
+model Message {
+  id        String        @id @default(cuid())
+  crmId     String
+  crm       Crm           @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  threadId  String
+  thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation(fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime      @default(now())
+  editedAt  DateTime?
+
+  attachments MessageAttachment[]
+
+  @@index([crmId, threadId, createdAt])
+}
+
+model MessageAttachment {
+  id         String   @id @default(cuid())
+  messageId  String
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+enum NotificationType {
+  PROSPECT_CREATED
+  CLIENT_UPDATED
+  APPOINTMENT_CREATED
+  APPOINTMENT_UPDATED
+  QUOTE_CREATED
+  QUOTE_UPDATED
+  TASK_CREATED
+  MESSAGE_RECEIVED
+  DOCUMENT_ADDED
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  crmId      String
+  crm        Crm              @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actor      User?            @relation("NotificationActor", fields: [actorId], references: [id])
+  type       NotificationType
+  title      String
+  body       String?
+  entityType String?
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([crmId, userId, readAt])
+}
+
+// ============================================================================
+// MODÈLES EMAIL & AUTOMATISATIONS
+// ============================================================================
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  crmId     String
+  crm       Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  key       String
+  name      String
+  subject   String
+  body      String
+  updatedAt DateTime @updatedAt
+
+  @@unique([crmId, key])
+}
+
+enum AutomationTrigger {
+  QUOTE_SENT
+  APPOINTMENT_COMPLETED
+  PROSPECT_CONVERTED
+  CLIENT_CREATED
+  NO_ACTIVITY_SINCE
+}
+
+enum AutomationActionType {
+  CREATE_TASK
+}
+
+model AutomationRule {
+  id        String            @id @default(cuid())
+  crmId     String
+  crm       Crm               @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  name      String
+  trigger   AutomationTrigger
+  delayDays Int               @default(0)
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+
+  actions AutomationAction[]
+
+  @@index([crmId, trigger])
+}
+
+model AutomationAction {
+  id     String               @id @default(cuid())
+  ruleId String
+  rule   AutomationRule       @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  type   AutomationActionType
+  config Json
+
+  @@index([ruleId])
+}
+
+// ============================================================================
+// OBJECTIFS COMMERCIAUX
+// ============================================================================
+
+enum ObjectivePeriod {
+  MONTHLY
+  QUARTERLY
+}
+
+model CommercialObjective {
+  id                 String          @id @default(cuid())
+  crmId              String
+  crm                Crm             @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period             ObjectivePeriod
+  periodStart        DateTime
+  targetRevenue      Decimal?        @db.Decimal(12, 2)
+  targetAppointments Int?
+  targetQuotes       Int?
+  targetNewClients   Int?
+
+  @@unique([crmId, userId, period, periodStart])
+}
+
+// ============================================================================
+// JOURNAL D'ACTIVITÉ
+// ============================================================================
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  crmId      String?
+  crm        Crm?     @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  clientId      String?
+  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  prospectId    String?
+  prospect      Prospect?    @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([crmId, createdAt])
+  @@index([crmId, entityType, entityId])
+  @@index([userId])
+}
+
+// ============================================================================
+// PLANNING (accès Ouvrier) — chantiers annuels et affectations
+// ============================================================================
+
+enum ChantierStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Chantier {
+  id          String         @id @default(cuid())
+  crmId       String
+  crm         Crm            @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  address     String?
+  startDate   DateTime
+  endDate     DateTime
+  color       String         @default("#0891b2")
+  status      ChantierStatus @default(PLANNED)
+  createdById String
+  createdBy   User           @relation("ChantierCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Indemnités fixes du chantier (catégorie OUVRIER) : communes à tous les
+  // salariés qui y sont mobilisés. La feuille de pointage salarié ne fait
+  // plus que cocher/décocher lesquelles s'appliquent — le montant vient
+  // toujours d'ici. Voir src/server/pointage/calc.ts.
+  lunchAllowance  Decimal @default(0) @db.Decimal(8, 2)
+  dinnerAllowance Decimal @default(0) @db.Decimal(8, 2)
+  travelAllowance Decimal @default(0) @db.Decimal(8, 2)
+  maskBonus       Decimal @default(0) @db.Decimal(8, 2)
+  managementBonus Decimal @default(0) @db.Decimal(8, 2)
+  zoneBonus       Decimal @default(0) @db.Decimal(8, 2)
+  postBonus       Decimal @default(0) @db.Decimal(8, 2)
+  // Ajoutés pour le tableau de comptabilité (transformation des fiches de
+  // pointage déposées en tableau Excel — voir src/server/accounting).
+  mealAllowance Decimal @default(9.81) @db.Decimal(8, 2)
+  clothingBonus Decimal @default(0) @db.Decimal(8, 2)
+
+  // Informations de mission, utilisées pour générer l'ordre de mission de
+  // chaque salarié affecté (voir src/server/mission-order).
+  missionNature      String?
+  clientName         String?
+  siteContactName    String?
+  siteContactPhone   String?
+  importantDocuments String?
+
+  assignments    ChantierAssignment[]
+  pointages      Pointage[]
+  vaultDocuments VaultDocument[]
+
+  @@index([crmId, startDate])
+}
+
+model ChantierAssignment {
+  id         String    @id @default(cuid())
+  chantierId String
+  chantier   Chantier  @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation("ChantierAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  startDate  DateTime?
+  endDate    DateTime?
+  note       String?
+  createdAt  DateTime  @default(now())
+
+  // Données variables de la mission de ce salarié sur ce chantier, saisies
+  // par l'admin à l'attribution (modifiables ensuite). Alimentent la
+  // feuille de pointage (remboursements km/trajet) et l'ordre de mission.
+  workerAddress       String?
+  kmRate              Decimal? @db.Decimal(8, 3)
+  distanceKm          Decimal? @db.Decimal(8, 2)
+  travelHourlyRate    Decimal? @db.Decimal(8, 2)
+  travelDurationHours Decimal? @db.Decimal(6, 2)
+
+  // Données propres à ce salarié sur ce chantier, pour le tableau de
+  // comptabilité (varient d'un salarié à l'autre, contrairement aux
+  // indemnités fixes du chantier — voir Chantier ci-dessus).
+  sncfExpense   Decimal? @db.Decimal(8, 2)
+  roomDeduction Decimal? @db.Decimal(8, 2)
+
+  @@unique([chantierId, userId])
+  @@index([userId])
+}
+
+// Saisie hebdomadaire des heures d'un salarié sur un chantier par son chef
+// de chantier (FOREMAN). `days` stocke le détail des 7 jours
+// (lundi → dimanche) sous la forme [{date, normal, matin, apresMidi,
+// nuit}], en heures décimales. Les 9 indemnités/primes communes à tout le
+// chantier (voir Chantier) et les 2 remboursements de trajet propres à
+// cette affectation (voir ChantierAssignment) ne sont plus saisis en
+// montant ici : le chef de chantier coche seulement lesquels s'appliquent
+// (*Applied) — le montant est calculé à l'affichage à partir du chantier
+// et de l'affectation. Seules les primes propres au salarié (logement,
+// salissure) et le taux horaire de nuit restent des montants saisis ici,
+// pré-remplis depuis UserCrmAccess mais ajustables par semaine. Voir
+// src/server/pointage/actions.ts et src/server/pointage/calc.ts.
+model Pointage {
+  id         String   @id @default(cuid())
+  crmId      String
+  crm        Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  chantierId String
+  chantier   Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   User     @relation("PointageEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  foremanId  String
+  foreman    User     @relation("PointageForeman", fields: [foremanId], references: [id])
+  weekStart  DateTime // lundi de la semaine concernée, normalisé à minuit
+  days       Json
+
+  housingAllowance Decimal @default(0) @db.Decimal(8, 2)
+  dirtAllowance    Decimal @default(0) @db.Decimal(8, 2)
+
+  // Taux propres à CETTE fiche (salarié + semaine), choisis par le chef de
+  // chantier — pré-remplis depuis UserCrmAccess.defaultHourlyRate et
+  // CrmPointageSettings.nightRatePercent pour une fiche encore jamais
+  // saisie, ajustables ensuite. Majoration nuit = heures de nuit × taux
+  // horaire × % de majoration ; par défaut à 0 : tant que le taux horaire
+  // n'est pas renseigné, aucune ligne "heures de nuit" n'apparaît sur le PDF.
+  hourlyRate       Decimal @default(0) @db.Decimal(8, 2)
+  nightRatePercent Decimal @default(0) @db.Decimal(5, 2)
+
+  // Cases à cocher : montant fixé par le chantier (lunch/dinner/travel/
+  // mask/management/zone/post/meal/clothing) ou calculé à partir de
+  // l'affectation (km/travelHours), jamais saisi ici.
+  lunchAllowanceApplied           Boolean @default(false)
+  dinnerAllowanceApplied          Boolean @default(false)
+  travelAllowanceApplied          Boolean @default(false)
+  maskBonusApplied                Boolean @default(false)
+  managementBonusApplied          Boolean @default(false)
+  zoneBonusApplied                Boolean @default(false)
+  postBonusApplied                Boolean @default(false)
+  kmReimbursementApplied          Boolean @default(false)
+  travelHoursReimbursementApplied Boolean @default(false)
+  mealAllowanceApplied            Boolean @default(false)
+  clothingBonusApplied            Boolean @default(false)
+
+  comments String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vaultDocuments VaultDocument[]
+
+  @@unique([chantierId, employeeId, weekStart])
+  @@index([crmId, weekStart])
+}
+
+// ============================================================================
+// COFFRE-FORT (Ouvrier + Commercial) — documents personnels, isolés par
+// utilisateur : jamais visibles par un autre utilisateur. Déposés par un
+// administrateur, ou par un chef de chantier pour les feuilles de pointage
+// qu'il génère (voir src/server/vault/actions.ts et
+// src/server/pointage/actions.ts).
+// ============================================================================
+
+enum VaultDocumentCategory {
+  PAYSLIP
+  DOCUMENT
+  TIMESHEET_EMPLOYEE
+  TIMESHEET_CLIENT
+  MISSION_ORDER
+  ACCOUNTING_EXPORT
+}
+
+// Dossier réel (façon "drive"), propre au coffre-fort d'un utilisateur
+// (ownerUserId) — imbriqué via parentId, racine si parentId est null.
+// Créé par un administrateur (gestion libre depuis /admin/vault ou
+// /c/[crmSlug]/vault) ou par un chef de chantier au moment du dépôt d'une
+// fiche de pointage (voir src/server/pointage/actions.ts).
+model VaultFolder {
+  id          String        @id @default(cuid())
+  crmId       String
+  crm         Crm           @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  ownerUserId String
+  owner       User          @relation("VaultFolderOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  name        String
+  parentId    String?
+  parent      VaultFolder?  @relation("VaultFolderChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children    VaultFolder[] @relation("VaultFolderChildren")
+  createdById String
+  createdBy   User          @relation("VaultFolderCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+
+  documents VaultDocument[]
+
+  @@index([crmId, ownerUserId, parentId])
+}
+
+model VaultDocument {
+  id           String                @id @default(cuid())
+  crmId        String
+  crm          Crm                   @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User                  @relation("VaultDocumentOwner", fields: [userId], references: [id], onDelete: Cascade)
+  fileName     String
+  mimeType     String
+  size         Int
+  storageKey   String
+  category     VaultDocumentCategory @default(DOCUMENT)
+  // Dossier réel (voir VaultFolder). Null = document à la racine du
+  // coffre-fort, non classé.
+  folderId     String?
+  folder       VaultFolder?          @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedById String
+  uploadedBy   User                  @relation("VaultDocumentUploadedBy", fields: [uploadedById], references: [id])
+  createdAt    DateTime              @default(now())
+
+  // Renseigné uniquement pour category=TIMESHEET_EMPLOYEE (voir
+  // depositEmployeeTimesheets) : relie le PDF déposé à la fiche de
+  // pointage source, pour permettre à "Transformer en tableau de
+  // comptabilité" (voir src/server/accounting) de relire les heures/
+  // indemnités d'origine à partir des documents sélectionnés dans le
+  // coffre-fort, sans avoir à reparser le PDF.
+  pointageId String?
+  pointage   Pointage? @relation(fields: [pointageId], references: [id], onDelete: SetNull)
+
+  // Renseignés uniquement pour category=ACCOUNTING_EXPORT (voir
+  // generateAccountingExport) : le chantier couvert par ce tableau et le
+  // chef de chantier ayant déposé les fiches de pointage source (lu sur
+  // ces fiches, jamais recalculé), pour classer l'onglet Comptabilité par
+  // chef de chantier plutôt qu'en simple liste de salariés.
+  chantierId String?
+  chantier   Chantier? @relation(fields: [chantierId], references: [id], onDelete: SetNull)
+  foremanId  String?
+  foreman    User?     @relation("VaultDocumentForeman", fields: [foremanId], references: [id], onDelete: SetNull)
+
+  @@index([crmId, userId])
+  @@index([pointageId])
+  @@index([foremanId])
+}
+
+// ============================================================================
+// API POUR INTÉGRATIONS EXTERNES (ex. Obsidian) — voir
+// src/server/admin/api-keys.ts (émission/révocation, réservé aux
+// administrateurs globaux) et src/app/api/public/v1/** (les routes qui
+// authentifient une requête via cette clé). Une clé donne accès à toutes
+// les données de tous les CRM, équivalent à un administrateur global.
+// Selon `permission`, choisi à la création et jamais modifiable ensuite
+// (une clé plus permissive = une nouvelle clé) :
+//  - READ_ONLY  : uniquement les routes GET.
+//  - READ_WRITE : GET + POST/PATCH/DELETE, en réutilisant tel quel le cœur
+//    métier des server actions existantes (voir le paramètre optionnel
+//    `actorCtx` de createClient/updateClient/... etc.) — mêmes règles
+//    métier, mêmes effets de bord (notifications, activité, pipeline...)
+//    que depuis l'application elle-même.
+// ============================================================================
+
+enum ApiKeyPermission {
+  READ_ONLY
+  READ_WRITE
+}
+
+model ApiKey {
+  id          String           @id @default(cuid())
+  name        String
+  // Jamais stockée en clair — même schéma que Session.tokenHash (voir
+  // src/lib/crypto.ts hashToken). keyPrefix est purement d'affichage
+  // (identifier la clé dans la liste sans pouvoir la reconstituer).
+  keyHash     String           @unique
+  keyPrefix   String
+  permission  ApiKeyPermission @default(READ_ONLY)
+  createdById String
+  createdBy   User             @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime         @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+}

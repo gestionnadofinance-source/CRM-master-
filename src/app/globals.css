@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+  --bg: 250 250 251;
+  --bg-subtle: 244 245 247;
+  --surface: 255 255 255;
+  --border: 226 229 235;
+  --text: 17 24 39;
+  --text-muted: 107 114 128;
+  --brand: 37 77 234;
+  --brand-fg: 255 255 255;
+}
+
+.dark {
+  --bg: 15 17 21;
+  --bg-subtle: 20 23 28;
+  --surface: 24 27 33;
+  --border: 39 43 51;
+  --text: 229 231 235;
+  --text-muted: 148 155 168;
+  --brand: 96 143 250;
+  --brand-fg: 15 17 21;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+html,
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-scroll {
+  scrollbar-width: thin;
+}
