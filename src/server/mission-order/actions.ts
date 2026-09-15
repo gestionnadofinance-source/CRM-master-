@@ -50,6 +50,9 @@ export async function depositMissionOrder(crmId: string, chantierId: string, emp
       storageKey,
       category: VaultDocumentCategory.MISSION_ORDER,
       folderId,
+      // Le chantier de l'ordre de mission : le coffre-fort regroupe cet
+      // onglet par chantier, et le nom du fichier n'est pas une donnée.
+      chantierId,
       uploadedById: ctx.user.id,
     },
   });

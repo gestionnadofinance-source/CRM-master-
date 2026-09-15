@@ -23,6 +23,13 @@ import { Button } from "@/components/ui/button";
 import { Input, Select, Label } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent, Badge } from "@/components/ui/card";
 import { cn, formatDate, initials } from "@/lib/utils";
+import {
+  isAutoCategory,
+  groupByMonth,
+  groupByChantier,
+  foldersForFreeTree,
+  type DocumentGroup,
+} from "@/lib/vault-grouping";
 
 type Document = Awaited<ReturnType<typeof listMyVaultDocuments>>[number];
 type FolderNode = Awaited<ReturnType<typeof listMyVaultFolders>>[number];
@@ -701,6 +708,28 @@ export function AdminVaultPanel({ crmId, members }: { crmId: string; members: Me
  * seule l'administration (AdminVaultPanel) garde ces droits, à la
  * demande explicite du client.
  */
+function GroupedDocuments({ crmId, groups, emptyLabel }: { crmId: string; groups: DocumentGroup<Document>[]; emptyLabel: string }) {
+  if (groups.length === 0) {
+    return <p className="py-10 text-center text-sm text-muted">{emptyLabel}</p>;
+  }
+  return (
+    <div className="space-y-5">
+      {groups.map((group) => (
+        <section key={group.key}>
+          <h3 className="pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+            {group.label} <span className="font-normal normal-case">({group.docs.length})</span>
+          </h3>
+          <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
+            {group.docs.map((doc) => (
+              <DocumentRow key={doc.id} doc={doc} canDelete={false} crmId={crmId} />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function MyVaultCard({
   crmId,
   initialDocuments,
@@ -713,6 +742,7 @@ function MyVaultCard({
   const [documents, setDocuments] = useState(initialDocuments);
   const [folders, setFolders] = useState(initialFolders);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("TIMESHEET_EMPLOYEE");
   const [, startTransition] = useTransition();
   const [moveTarget, setMoveTarget] = useState<{ type: "folder" | "document"; id: string } | null>(null);
 
@@ -741,6 +771,27 @@ function MyVaultCard({
     });
   }
 
+  const freeDocuments = documents.filter((doc) => !isAutoCategory(doc.category));
+  const freeFolders = foldersForFreeTree(folders, documents);
+
+  // L'onglet Pointage client n'a de sens que pour un chef de chantier : c'est
+  // lui qui dépose ces fiches dans son propre coffre-fort (voir
+  // depositClientTimesheet). Plutôt que de réinterroger le serveur pour savoir
+  // qui est chef de chantier, on se fie à la présence de ces documents — un
+  // onglet vide n'aurait rien à montrer de toute façon.
+  const hasClientTimesheets = documents.some((doc) => doc.category === "TIMESHEET_CLIENT");
+
+  const tabs = [
+    { key: "TIMESHEET_EMPLOYEE", label: "Feuilles de pointage" },
+    { key: "MISSION_ORDER", label: "Ordres de mission" },
+    ...(hasClientTimesheets ? [{ key: "TIMESHEET_CLIENT", label: "Pointage client" }] : []),
+    { key: "DOCUMENTS", label: "Mes documents" },
+  ];
+  // L'onglet actif peut disparaître entre deux rendus (dernier pointage client
+  // déplacé, par exemple) : on retombe alors sur le premier plutôt que
+  // d'afficher du vide.
+  const currentTab = tabs.some((tab) => tab.key === activeTab) ? activeTab : tabs[0]!.key;
+
   return (
     <Card>
       <CardHeader className="flex items-center gap-2">
@@ -748,23 +799,64 @@ function MyVaultCard({
         <CardTitle>Mon coffre-fort</CardTitle>
       </CardHeader>
       <CardContent>
-        <FolderView
-          folders={folders}
-          documents={documents}
-          currentFolderId={currentFolderId}
-          onNavigate={setCurrentFolderId}
-          canDelete={false}
-          crmId={crmId}
-          onCreateFolder={handleCreateFolder}
-          onMoveFolder={(id) => setMoveTarget({ type: "folder", id })}
-          onMoveDocument={(id) => setMoveTarget({ type: "document", id })}
-        />
+        <div className="mb-4 flex flex-wrap gap-1.5 border-b border-border pb-3">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              aria-current={tab.key === currentTab ? "page" : undefined}
+              className={cn(
+                "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                tab.key === currentTab ? "bg-brand text-brand-fg" : "bg-bg-subtle text-muted hover:text-text"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {currentTab === "TIMESHEET_EMPLOYEE" && (
+          <GroupedDocuments
+            crmId={crmId}
+            groups={groupByMonth(documents.filter((doc) => doc.category === "TIMESHEET_EMPLOYEE"))}
+            emptyLabel="Aucune feuille de pointage déposée."
+          />
+        )}
+        {currentTab === "MISSION_ORDER" && (
+          <GroupedDocuments
+            crmId={crmId}
+            groups={groupByChantier(documents.filter((doc) => doc.category === "MISSION_ORDER"))}
+            emptyLabel="Aucun ordre de mission déposé."
+          />
+        )}
+        {currentTab === "TIMESHEET_CLIENT" && (
+          <GroupedDocuments
+            crmId={crmId}
+            groups={groupByMonth(documents.filter((doc) => doc.category === "TIMESHEET_CLIENT"))}
+            emptyLabel="Aucune fiche de pointage client déposée."
+          />
+        )}
+        {currentTab === "DOCUMENTS" && (
+          <FolderView
+            folders={freeFolders}
+            documents={freeDocuments}
+            currentFolderId={currentFolderId}
+            onNavigate={setCurrentFolderId}
+            canDelete={false}
+            crmId={crmId}
+            onCreateFolder={handleCreateFolder}
+            onMoveFolder={(id) => setMoveTarget({ type: "folder", id })}
+            onMoveDocument={(id) => setMoveTarget({ type: "document", id })}
+          />
+        )}
       </CardContent>
       {moveTarget && (
         <FolderPickerModal
           open
           title={moveTarget.type === "folder" ? "Déplacer le dossier" : "Déplacer le fichier"}
-          folders={folders}
+          /* Mêmes dossiers que l'onglet d'où part le déplacement : proposer une
+             destination masquée de l'arborescence y ferait disparaître le fichier. */
+          folders={freeFolders}
           excludeSubtreeOf={moveTarget.type === "folder" ? moveTarget.id : null}
           onClose={() => setMoveTarget(null)}
           onPick={handleMove}

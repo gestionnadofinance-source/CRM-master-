@@ -1368,11 +1368,22 @@ model VaultDocument {
   pointageId String?
   pointage   Pointage? @relation(fields: [pointageId], references: [id], onDelete: SetNull)
 
-  // Renseignés uniquement pour category=ACCOUNTING_EXPORT (voir
-  // generateAccountingExport) : le chantier couvert par ce tableau et le
-  // chef de chantier ayant déposé les fiches de pointage source (lu sur
-  // ces fiches, jamais recalculé), pour classer l'onglet Comptabilité par
-  // chef de chantier plutôt qu'en simple liste de salariés.
+  // Période couverte par le document — lundi de la semaine concernée, comme
+  // Pointage.weekStart. Renseigné pour les fiches de pointage (salarié et
+  // client) ; null pour les documents qui ne couvrent pas de période (fiche
+  // de paie, ordre de mission, document libre).
+  //
+  // Distinct de createdAt, qui est la date de DÉPÔT : une fiche de la semaine
+  // du 3 mars déposée le 2 avril doit se classer en mars. Le coffre-fort
+  // regroupe les fiches par mois sur ce champ (voir le regroupement par
+  // période dans src/server/vault/actions.ts).
+  periodStart DateTime?
+
+  // Le chantier concerné. Renseigné pour category=ACCOUNTING_EXPORT (voir
+  // generateAccountingExport), MISSION_ORDER (voir depositMissionOrder) et
+  // TIMESHEET_CLIENT (voir depositClientTimesheet) — ces deux derniers pour
+  // que le coffre-fort puisse les regrouper par chantier sans relire le nom
+  // du fichier, qui n'est pas une donnée.
   chantierId String?
   chantier   Chantier? @relation(fields: [chantierId], references: [id], onDelete: SetNull)
   foremanId  String?
@@ -1381,6 +1392,9 @@ model VaultDocument {
   @@index([crmId, userId])
   @@index([pointageId])
   @@index([foremanId])
+  // Le coffre-fort liste les documents d'une personne par catégorie, puis les
+  // regroupe par période — voir listMyVaultDocuments.
+  @@index([crmId, userId, category, periodStart])
 }
 
 // ============================================================================

@@ -26,14 +26,29 @@ export async function findOrCreateRootFolder(crmId: string, ownerUserId: string,
   return created.id;
 }
 
+/**
+ * Ce que le coffre-fort a besoin de savoir d'un document pour l'afficher et le
+ * classer. `chantier` et `periodStart` portent les regroupements par chantier
+ * et par mois (voir VaultDocument dans prisma/schema.prisma) ; ils sont nuls
+ * sur les documents qui n'ont pas de période ou de chantier — fiche de paie,
+ * document libre — et sur ceux déposés avant l'ajout de ces champs.
+ */
+const VAULT_DOCUMENT_SHAPE = {
+  uploadedBy: { select: { firstName: true, lastName: true } },
+  chantier: { select: { id: true, name: true } },
+} as const;
+
 /** Le coffre-fort d'un utilisateur ne lui est visible qu'à lui-même (et aux administrateurs du CRM). */
 export async function listMyVaultDocuments(crmId: string) {
   const ctx = await requireAuth();
   const tenant = await requireCrmAccess(ctx, crmId);
   return prisma.vaultDocument.findMany({
     where: { crmId: tenant.crmId, userId: ctx.user.id },
-    orderBy: { createdAt: "desc" },
-    include: { uploadedBy: { select: { firstName: true, lastName: true } } },
+    // periodStart d'abord : dans un onglet regroupé par mois, les fiches se
+    // lisent de la plus récente à la plus ancienne selon la semaine couverte,
+    // pas selon la date de dépôt. createdAt départage celles sans période.
+    orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
+    include: VAULT_DOCUMENT_SHAPE,
   });
 }
 
@@ -188,8 +203,8 @@ export async function listVaultDocumentsForUser(crmId: string, targetUserId: str
   if (!member) return [];
   return prisma.vaultDocument.findMany({
     where: { crmId: tenant.crmId, userId: targetUserId },
-    orderBy: { createdAt: "desc" },
-    include: { uploadedBy: { select: { firstName: true, lastName: true } } },
+    orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
+    include: VAULT_DOCUMENT_SHAPE,
   });
 }
 

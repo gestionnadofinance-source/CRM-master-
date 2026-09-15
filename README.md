@@ -213,7 +213,10 @@ Des administrateurs supplémentaires se créent ensuite depuis
 ## Rôles et permissions
 
 - **Administrateur global** (`User.isGlobalAdmin`) : accès complet à
-  l'administration et à tous les CRM. Plusieurs administrateurs globaux
+  l'administration et à tous les CRM. L'espace `/admin` reprend, avec un
+  sélecteur de CRM en tête, les fonctions qui sinon obligeraient à entrer dans
+  chaque CRM l'un après l'autre : `/admin/planning`, `/admin/vault` et
+  `/admin/comptabilite`. Plusieurs administrateurs globaux
   peuvent coexister.
 - **Responsable CRM** / **Utilisateur** (`UserCrmAccess.role`, par CRM —
   un même utilisateur peut être responsable sur un CRM et simple
@@ -288,6 +291,42 @@ messagerie — l'appartenance au fil de discussion (un membre du CRM ne
 peut pas récupérer la pièce jointe d'une conversation privée à laquelle
 il n'appartient pas). Types de fichiers et taille limités
 (`src/lib/storage.ts`).
+
+### Coffre-fort personnel : classement par onglets
+
+Les fiches de pointage, ordres de mission et pointages client sont déposés
+automatiquement par l'application, par dizaines, dans des dossiers créés à la
+volée (un par semaine et par chantier). Le coffre-fort les présente donc par
+onglets plutôt qu'en arborescence, chacun regroupé sur la donnée qui compte :
+
+| Onglet | Contenu | Regroupement |
+| --- | --- | --- |
+| Feuilles de pointage | `TIMESHEET_EMPLOYEE` | par mois couvert |
+| Ordres de mission | `MISSION_ORDER` | par chantier |
+| Pointage client | `TIMESHEET_CLIENT` | par mois couvert — onglet affiché uniquement aux chefs de chantier, seuls à en déposer |
+| Mes documents | tout le reste (fiches de paie, documents déposés à la main, tableaux de comptabilité) | arborescence libre |
+
+Le mois retenu est celui **couvert** par la fiche (`VaultDocument.periodStart`,
+la semaine concernée), jamais la date de dépôt : une fiche de la semaine du
+3 mars déposée le 2 avril se classe en mars. Le chantier vient de
+`VaultDocument.chantierId`, renseigné au dépôt — jamais relu dans le nom du
+fichier, qui n'est pas une donnée. Les documents antérieurs à l'enregistrement
+de ces champs retombent sur leur date de dépôt, et sur un groupe « Chantier non
+renseigné ».
+
+L'onglet « Mes documents » masque les dossiers dont tout le contenu est du
+déposé automatique : ces documents sont déjà classés par les onglets dédiés, et
+le dossier n'apparaîtrait ici que vide. Un dossier vide est au contraire
+conservé — c'est celui que le propriétaire vient de créer.
+
+Le classement lui-même (`src/lib/vault-grouping.ts`) est un module pur, sans
+Prisma ni React, couvert par `tests/vault-grouping.test.ts`.
+
+**Qui réorganise quoi** : le propriétaire crée des dossiers et déplace ses
+documents dans son propre coffre-fort, mais ne peut ni renommer ni supprimer —
+ces deux actions restent réservées à l'administration, pour qu'une pièce que
+l'entreprise doit conserver (fiche de paie) ne disparaisse pas par accident.
+Voir `createVaultFolder` dans `src/server/vault/actions.ts`.
 
 ## Emails
 

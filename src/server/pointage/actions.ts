@@ -668,6 +668,10 @@ export async function depositEmployeeTimesheets(crmId: string, chantierId: strin
           storageKey,
           category: VaultDocumentCategory.TIMESHEET_EMPLOYEE,
           folderId,
+          // Période et chantier couverts, pour que le coffre-fort puisse
+          // regrouper sans relire le nom du fichier ni rejoindre Pointage.
+          periodStart: weekStart,
+          chantierId,
           pointageId: p.id,
           uploadedById: ctx.user.id,
         },
@@ -723,7 +727,10 @@ async function buildClientTimesheetPdf(tenant: TenantContext, ctx: AuthContext, 
     foremanName: `${ctx.user.firstName} ${ctx.user.lastName}`,
     rows: pointages.map((p) => ({ employeeName: `${p.employee.firstName} ${p.employee.lastName}`, days: toDayArray(p.days) })),
   });
-  return { buffer, weekNumber, chantierName: chantier.name };
+  // weekStart est remonté pour être enregistré tel quel sur le document du
+  // coffre-fort (VaultDocument.periodStart) : la semaine couverte, distincte
+  // de la date de dépôt.
+  return { buffer, weekNumber, weekStart, chantierName: chantier.name };
 }
 
 export async function emailClientTimesheet(crmId: string, chantierId: string, weekStartIso: string): Promise<ActionResult> {
@@ -776,6 +783,9 @@ export async function depositClientTimesheet(crmId: string, chantierId: string, 
       storageKey,
       category: VaultDocumentCategory.TIMESHEET_CLIENT,
       folderId,
+      // Idem : la semaine couverte (et non la date de dépôt) et le chantier.
+      periodStart: rendered.weekStart,
+      chantierId,
       uploadedById: ctx.user.id,
     },
   });
