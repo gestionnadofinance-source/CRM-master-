@@ -1,5 +1,5 @@
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug } from "@/server/tenant";
+import { requireCrmAccessBySlugOrNotFound } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { listCrmMembers } from "@/server/shared/members";
 import { AgendaClient } from "./agenda-client";
@@ -21,7 +21,7 @@ export default async function AgendaPage({
   const { crmSlug } = await params;
   const sp = await searchParams;
   const ctx = await requireAuth();
-  const tenant = await requireCrmAccessBySlug(ctx, crmSlug, Permission.MANAGE_APPOINTMENTS);
+  const tenant = await requireCrmAccessBySlugOrNotFound(ctx, crmSlug, Permission.MANAGE_APPOINTMENTS);
 
   const members = await listCrmMembers(tenant.crmId);
 

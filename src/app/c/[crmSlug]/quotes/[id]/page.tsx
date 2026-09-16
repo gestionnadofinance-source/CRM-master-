@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug } from "@/server/tenant";
+import { requireCrmAccessBySlugOrNotFound } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { getQuoteEditorData } from "@/server/quotes/actions";
 import { QuoteEditor } from "../quote-editor";
@@ -16,7 +16,7 @@ export default async function QuoteDetailPage({
 }) {
   const { crmSlug, id } = await params;
   const ctx = await requireAuth();
-  const tenant = await requireCrmAccessBySlug(ctx, crmSlug, Permission.MANAGE_QUOTES);
+  const tenant = await requireCrmAccessBySlugOrNotFound(ctx, crmSlug, Permission.MANAGE_QUOTES);
 
   const data = await getQuoteEditorData(tenant.crmId, id);
   if (!data.ok || !data.quote) notFound();

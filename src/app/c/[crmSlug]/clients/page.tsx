@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug } from "@/server/tenant";
+import { requireCrmAccessBySlugOrNotFound } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { prisma } from "@/lib/prisma";
 import { listCrmMembers } from "@/server/shared/members";
@@ -28,7 +28,7 @@ export default async function ClientsPage({
   const { crmSlug } = await params;
   const sp = await searchParams;
   const ctx = await requireAuth();
-  const tenant = await requireCrmAccessBySlug(ctx, crmSlug, Permission.MANAGE_CLIENTS);
+  const tenant = await requireCrmAccessBySlugOrNotFound(ctx, crmSlug, Permission.MANAGE_CLIENTS);
 
   const q = one(sp, "q");
   const ownerId = one(sp, "owner");

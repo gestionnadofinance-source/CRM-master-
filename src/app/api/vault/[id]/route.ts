@@ -44,7 +44,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     headers: {
       "Content-Type": document.mimeType,
       "Content-Disposition": `inline; filename="${encodeURIComponent(document.fileName)}"`,
-      "Content-Length": String(document.size),
+      // Longueur du fichier RÉELLEMENT servi, jamais document.size : cette
+      // colonne est un instantané de la taille au dépôt, et toute divergence
+      // (objet de stockage remplacé, restauration, reprise de données)
+      // tronquait silencieusement le téléchargement — fichier corrompu côté
+      // utilisateur, sans la moindre erreur.
+      "Content-Length": String(buffer.length),
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
     },

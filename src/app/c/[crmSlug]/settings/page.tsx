@@ -1,5 +1,5 @@
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug } from "@/server/tenant";
+import { requireCrmAccessBySlugOrNotFound } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { prisma } from "@/lib/prisma";
 import { getServerEnv } from "@/lib/env";
@@ -10,7 +10,7 @@ import { SettingsTabs } from "./settings-tabs";
 export default async function CrmSettingsPage({ params }: { params: Promise<{ crmSlug: string }> }) {
   const { crmSlug } = await params;
   const ctx = await requireAuth();
-  const tenant = await requireCrmAccessBySlug(ctx, crmSlug, Permission.MANAGE_SETTINGS);
+  const tenant = await requireCrmAccessBySlugOrNotFound(ctx, crmSlug, Permission.MANAGE_SETTINGS);
 
   const [companySettings, stages, sources, tags, customFields, vatRates, bookingSettings, quoteTemplates, emailTemplates, pointageSettings] =
     await Promise.all([

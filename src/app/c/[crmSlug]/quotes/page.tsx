@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug } from "@/server/tenant";
+import { requireCrmAccessBySlugOrNotFound } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { prisma } from "@/lib/prisma";
 import { listCrmMembers } from "@/server/shared/members";
@@ -30,7 +30,7 @@ export default async function QuotesPage({
   const { crmSlug } = await params;
   const sp = await searchParams;
   const ctx = await requireAuth();
-  const tenant = await requireCrmAccessBySlug(ctx, crmSlug, Permission.MANAGE_QUOTES);
+  const tenant = await requireCrmAccessBySlugOrNotFound(ctx, crmSlug, Permission.MANAGE_QUOTES);
 
   // Convention partagée avec les autres modules (agenda, tâches) : un lien
   // "Nouveau devis" depuis la fiche client passe par ?newForClient=<id> sur

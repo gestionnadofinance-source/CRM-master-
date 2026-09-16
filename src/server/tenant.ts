@@ -1,5 +1,5 @@
 import "server-only";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AuthError, type AuthContext } from "@/server/auth/session";
 import { Permission, CrmRole, AccessCategory, effectivePermissions, hasPermission } from "@/server/permissions";
@@ -186,5 +186,49 @@ export async function requireOperationsAccess(ctx: AuthContext, crmId: string): 
 export function assertBelongsToCrm(entityCrmId: string, tenant: TenantContext, entityLabel = "Ressource"): void {
   if (entityCrmId !== tenant.crmId) {
     throw new AuthError("CRM_ACCESS_DENIED", `${entityLabel} introuvable dans ce CRM.`);
+  }
+}
+
+/**
+ * Variantes des gardes d'accès destinées au rendu d'une PAGE.
+ *
+ * Next.js peut rendre layout.tsx et page.tsx en parallèle : le
+ * `catch (AuthError) → notFound()` du layout /c/[crmSlug] ne protège donc pas
+ * une AuthError levée par la page elle-même. Celle-ci remonte alors en HTTP
+ * 500 — une page d'erreur serveur là où l'utilisateur devrait simplement ne
+ * rien trouver, et un signal exploitable : un 500 confirme que la ressource
+ * existe (dans un autre CRM), là où un 404 est indistinguable d'un
+ * identifiant inventé.
+ *
+ * Les pages /admin/* réglaient déjà le problème par une garde explicite
+ * (`if (!ctx.user.isGlobalAdmin) notFound()`), les pages de CRM non. Ces deux
+ * fonctions sont l'équivalent pour elles. Les server actions continuent
+ * d'utiliser les gardes brutes : une action doit propager l'AuthError, pas la
+ * transformer en 404.
+ */
+export async function requireCrmAccessBySlugOrNotFound(
+  ctx: AuthContext,
+  crmSlug: string,
+  permission?: Permission
+): Promise<TenantContext> {
+  try {
+    return await requireCrmAccessBySlug(ctx, crmSlug, permission);
+  } catch (err) {
+    if (err instanceof AuthError) notFound();
+    throw err;
+  }
+}
+
+/** Voir requireCrmAccessBySlugOrNotFound : même traduction, pour la vérification d'appartenance. */
+export function assertBelongsToCrmOrNotFound(
+  entityCrmId: string,
+  tenant: TenantContext,
+  entityLabel = "Ressource"
+): void {
+  try {
+    assertBelongsToCrm(entityCrmId, tenant, entityLabel);
+  } catch (err) {
+    if (err instanceof AuthError) notFound();
+    throw err;
   }
 }

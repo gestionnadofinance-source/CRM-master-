@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug, assertBelongsToCrm } from "@/server/tenant";
+import { requireCrmAccessBySlugOrNotFound, assertBelongsToCrmOrNotFound } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { prisma } from "@/lib/prisma";
 import { listCrmMembers } from "@/server/shared/members";
@@ -13,7 +13,7 @@ export default async function ClientDetailPage({
 }) {
   const { crmSlug, id } = await params;
   const ctx = await requireAuth();
-  const tenant = await requireCrmAccessBySlug(ctx, crmSlug, Permission.MANAGE_CLIENTS);
+  const tenant = await requireCrmAccessBySlugOrNotFound(ctx, crmSlug, Permission.MANAGE_CLIENTS);
 
   const client = await prisma.client.findUnique({
     where: { id },
@@ -27,7 +27,7 @@ export default async function ClientDetailPage({
     },
   });
   if (!client) notFound();
-  assertBelongsToCrm(client.crmId, tenant, "Client");
+  assertBelongsToCrmOrNotFound(client.crmId, tenant, "Client");
 
   const [activity, sources, tags, members, opportunities] = await Promise.all([
     // "Activité récente" de la fiche ne montre que les 24 dernières heures.

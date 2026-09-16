@@ -1,5 +1,5 @@
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug } from "@/server/tenant";
+import { requireCrmAccessBySlugOrNotFound } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { prisma } from "@/lib/prisma";
 import { listCrmMembers } from "@/server/shared/members";
@@ -9,7 +9,7 @@ import { AvailabilityClient } from "./availability-client";
 export default async function BookingSettingsPage({ params }: { params: Promise<{ crmSlug: string }> }) {
   const { crmSlug } = await params;
   const ctx = await requireAuth();
-  const tenant = await requireCrmAccessBySlug(ctx, crmSlug, Permission.MANAGE_APPOINTMENTS);
+  const tenant = await requireCrmAccessBySlugOrNotFound(ctx, crmSlug, Permission.MANAGE_APPOINTMENTS);
 
   const [members, rules, exceptions, publicAppointments, bookingSettings] = await Promise.all([
     listCrmMembers(tenant.crmId),

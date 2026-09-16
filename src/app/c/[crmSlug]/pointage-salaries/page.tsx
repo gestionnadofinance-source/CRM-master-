@@ -1,12 +1,20 @@
+import { notFound } from "next/navigation";
 import { requireAuth } from "@/server/auth/session";
 import { requireCrmAccessBySlug } from "@/server/tenant";
-import { listMyForemanChantiers } from "@/server/pointage/actions";
+import { amIForeman, listMyForemanChantiers } from "@/server/pointage/actions";
 import { PointageSalariesClient } from "./pointage-salaries-client";
 
 export default async function PointageSalariesPage({ params }: { params: Promise<{ crmSlug: string }> }) {
   const { crmSlug } = await params;
   const ctx = await requireAuth();
   const tenant = await requireCrmAccessBySlug(ctx, crmSlug);
+  // Onglet réservé aux chefs de chantier (et aux administrateurs / à la
+  // catégorie SECRETAIRE, voir amIForeman). La navigation le masque déjà aux
+  // autres, mais le masquage d'interface n'est jamais une protection : sans ce
+  // contrôle la page restait atteignable par URL directe. Elle n'y montrait
+  // rien — listMyForemanChantiers renvoie une liste vide à un non-chef — mais
+  // une page accessible qui ne devrait pas l'être finit par le devenir.
+  if (!(await amIForeman(tenant.crmId))) notFound();
   const chantiers = await listMyForemanChantiers(tenant.crmId);
 
   return (
