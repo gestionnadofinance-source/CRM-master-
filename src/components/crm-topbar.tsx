@@ -50,6 +50,8 @@ export function CrmTopbar({
           <Link
             href={`/c/${current.slug}/messages`}
             className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-bg-subtle hover:text-text"
+            // Lien sans texte : sans ce libellé, un lecteur d'écran n'annonce que l'URL.
+            aria-label="Messagerie"
           >
             <MessageCircle className="h-4.5 w-4.5" />
           </Link>

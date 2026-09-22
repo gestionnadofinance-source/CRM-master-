@@ -69,6 +69,11 @@ export function NotificationsBell({ crmId, crmSlug }: { crmId: string; crmSlug: 
           if (next) refreshList();
         }}
         className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-bg-subtle hover:text-text"
+        // Bouton sans texte : l'icône seule ne donne aucun nom accessible. Le
+        // compte non lu est annoncé ici parce que la pastille rouge qui le
+        // porte visuellement est, elle, purement graphique.
+        aria-label={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? "s" : ""}` : "Notifications"}
+        aria-expanded={open}
       >
         <Bell className="h-4.5 w-4.5" />
         {unread > 0 && (

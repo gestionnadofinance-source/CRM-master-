@@ -13,5 +13,9 @@ export async function setThemePreference(theme: ThemePreference): Promise<void> 
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
     sameSite: "lax",
+    // Lu par le script de thème côté client (voir ThemeScript), donc pas
+    // httpOnly — mais rien ne justifie de l'émettre en clair : `secure` en
+    // production, jamais en développement local où l'application est en HTTP.
+    secure: process.env.NODE_ENV === "production",
   });
 }

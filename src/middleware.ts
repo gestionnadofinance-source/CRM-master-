@@ -40,7 +40,12 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/api/public") ||
     pathname.startsWith("/book/") ||
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon")
+    pathname.startsWith("/favicon") ||
+    // robots.txt doit rester lisible sans session : redirigé vers /login, il
+    // renvoyait une page HTML au lieu de la consigne, et les robots se
+    // retrouvaient sans directive du tout — exactement l'inverse du but
+    // recherché (voir src/app/robots.ts).
+    pathname === "/robots.txt"
   ) {
     return NextResponse.next();
   }

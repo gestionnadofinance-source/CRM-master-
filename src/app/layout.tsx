@@ -5,6 +5,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "CRM Master",
   description: "Gestion commerciale interne",
+  // Outil interne : aucune page ne doit être indexée. Double ceinture avec
+  // src/app/robots.ts — robots.txt est une consigne qu'un robot peut ignorer,
+  // la balise meta est lue au moment de l'indexation elle-même.
+  robots: { index: false, follow: false },
 };
 
 // Sans ce viewport, un navigateur mobile rend la page comme si l'écran

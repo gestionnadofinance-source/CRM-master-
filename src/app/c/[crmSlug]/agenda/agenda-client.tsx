@@ -141,7 +141,14 @@ export function AgendaClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="w-32 sm:w-44">
+          {/* Filtre sans <label> visible (le design n'en prévoit pas) : le nom
+              accessible passe donc par aria-label, sans rien afficher de plus. */}
+          <Select
+            value={ownerFilter}
+            onChange={(e) => setOwnerFilter(e.target.value)}
+            className="w-32 sm:w-44"
+            aria-label="Filtrer par commercial"
+          >
             <option value="all">Tous les commerciaux</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>

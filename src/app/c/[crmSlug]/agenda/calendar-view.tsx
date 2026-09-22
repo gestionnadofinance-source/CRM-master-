@@ -130,7 +130,11 @@ function TimeGrid({
   const gridHeight = hours.length * HOUR_HEIGHT;
 
   return (
-    <div className="flex overflow-x-auto">
+    // Zone défilante horizontalement : sans tabIndex, son contenu est
+    // inatteignable pour qui navigue au clavier (le défilement ne peut être
+    // déclenché qu'à la souris). tabIndex={0} ne change rien à l'affichage,
+    // il ajoute seulement une cible de focus.
+    <div className="flex overflow-x-auto" tabIndex={0} role="region" aria-label="Grille horaire du calendrier">
       <div className="w-14 shrink-0">
         <div className="h-10" />
         {hours.map((h) => (
