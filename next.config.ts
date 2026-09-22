@@ -25,9 +25,10 @@ const CSP = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
+  // Next.js 16 a retiré l'exécution d'ESLint de `next build` (et la clé
+  // `eslint` de sa configuration) : le lint n'est plus une étape du build.
+  // Il reste appliqué par `npm run lint`, exécuté en intégration continue
+  // avant le typecheck et les tests (.github/workflows/ci.yml).
   experimental: {
     serverActions: {
       bodySizeLimit: "15mb",

@@ -6,10 +6,10 @@
  * Usage : npm run seed
  * Variables optionnelles : ADMIN_EMAIL, ADMIN_FIRST_NAME, ADMIN_LAST_NAME, ADMIN_PASSWORD
  */
-import { PrismaClient } from "@prisma/client";
+import { createScriptPrismaClient } from "./client";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrismaClient();
 
 /**
  * Lit une variable d'environnement optionnelle en traitant une valeur vide

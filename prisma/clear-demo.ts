@@ -14,9 +14,9 @@
  *
  * Usage : npm run seed:demo:clear
  */
-import { PrismaClient } from "@prisma/client";
+import { createScriptPrismaClient } from "./client";
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrismaClient();
 
 const DEMO_EMAIL_DOMAIN = "demo.crm-master.local";
 const DEMO_PREFIX = "[DEMO] ";

@@ -8,16 +8,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Depuis Prisma 7, les URL de connexion ne peuvent plus figurer ici : elles
+// sont déclarées dans prisma.config.ts pour Migrate, et fournies au client
+// d'exécution par un adaptateur de pilote (voir src/lib/prisma.ts). La
+// distinction entre connexion poolée et connexion directe, elle, n'a pas
+// changé — voir le commentaire de prisma.config.ts.
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  // Connexion directe (non poolée) utilisée uniquement par Prisma Migrate.
-  // Nécessaire avec les fournisseurs qui exposent DATABASE_URL derrière un
-  // pooler PgBouncer en mode transaction (ex. Neon) : ce mode ne supporte
-  // pas les verrous consultatifs que Migrate utilise pour éviter les
-  // migrations concurrentes. Sans pooler, DIRECT_URL peut simplement
-  // pointer vers la même valeur que DATABASE_URL.
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 // ============================================================================

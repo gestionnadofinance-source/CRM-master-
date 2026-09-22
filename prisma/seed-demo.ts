@@ -27,15 +27,15 @@ import {
   AppointmentStatus,
   CrmRole,
   ClientStatus,
-  PrismaClient,
   ProspectStatus,
   QuoteStatus,
   TaskPriority,
   TaskStatus,
 } from "@prisma/client";
+import { createScriptPrismaClient } from "./client";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const prisma = createScriptPrismaClient();
 
 const DEMO_PASSWORD = "DemoPass123!";
 const DEMO_EMAIL_DOMAIN = "demo.crm-master.local";
