@@ -10,7 +10,13 @@
   --surface: 255 255 255;
   --border: 226 229 235;
   --text: 17 24 39;
-  --text-muted: 107 114 128;
+  /* 105 112 126 plutôt que 107 114 128 : sur --bg-subtle (244 245 247), le
+     texte atténué tombait à 4,43:1, soit 0,07 sous le seuil WCAG AA de 4,5:1
+     pour le texte courant. Deux points de luminosité en moins (0,8 %) le
+     portent à 4,56:1 sur ce fond, et à 4,71:1 / 4,92:1 sur --bg et --surface
+     où il était déjà conforme. Le thème sombre est inchangé : il atteint déjà
+     6,17:1 à 6,76:1. */
+  --text-muted: 105 112 126;
   --brand: 37 77 234;
   --brand-fg: 255 255 255;
 }
