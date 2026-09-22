@@ -143,7 +143,7 @@ export async function requireAuth(): Promise<AuthContext> {
  * invalide jusqu'à la prochaine connexion réussie, qui le remplace ; ce
  * n'est jamais un problème car /login revalide lui-même en base plutôt
  * que de faire confiance à la simple présence du cookie (voir
- * src/app/login/page.tsx et src/middleware.ts).
+ * src/app/login/page.tsx et src/proxy.ts).
  */
 export async function requireActiveAuth(): Promise<AuthContext> {
   let ctx: AuthContext;

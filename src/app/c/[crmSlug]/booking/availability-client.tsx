@@ -193,7 +193,7 @@ export function AvailabilityClient({
           ) : (
             <div className="space-y-2">
               {!publicBookingEnabled && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-xs text-amber-800 dark:text-amber-400">
                   La réservation en ligne est actuellement désactivée : ce lien ne sera pas utilisable par vos clients tant qu&apos;elle
                   n&apos;est pas réactivée.
                 </p>

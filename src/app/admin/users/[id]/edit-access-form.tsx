@@ -239,7 +239,7 @@ export function EditAccessForm({
       )}
 
       {error && <p className="text-sm text-red-500">{error}</p>}
-      {success && <p className="text-sm text-emerald-600 dark:text-emerald-400">Modifications enregistrées.</p>}
+      {success && <p className="text-sm text-emerald-700 dark:text-emerald-400">Modifications enregistrées.</p>}
 
       <div className="flex justify-end border-t border-border pt-4">
         <Button type="submit" disabled={pending}>

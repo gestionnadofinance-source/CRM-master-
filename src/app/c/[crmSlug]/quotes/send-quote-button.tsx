@@ -79,7 +79,7 @@ export function SendQuoteButton({
             <Label htmlFor="toEmail">Destinataire</Label>
             <Input id="toEmail" type="email" value={toEmail} onChange={(e) => setToEmail(e.target.value)} placeholder="client@exemple.fr" />
             {!clientEmail && (
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              <p className="mt-1 text-xs text-amber-800 dark:text-amber-400">
                 Aucun email connu pour ce client — renseignez-en un avant d&apos;envoyer.
               </p>
             )}

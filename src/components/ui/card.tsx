@@ -29,9 +29,14 @@ export function Badge({
 }: HTMLAttributes<HTMLSpanElement> & { variant?: "default" | "success" | "warning" | "danger" | "brand" }) {
   const variants: Record<string, string> = {
     default: "bg-bg-subtle text-muted",
-    success: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-    warning: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-    danger: "bg-red-500/15 text-red-600 dark:text-red-400",
+    // Tons 700/800 en thème clair, et non 600 : sur un fond teinté à 15 %, le
+    // ton 600 tombait sous le seuil WCAG AA (success 3,28:1, warning 2,84:1,
+    // danger 3,97:1 pour 4,5:1 requis). Le jaune demande le ton 800, le 700 ne
+    // suffisant pas (4,47:1). Le thème sombre est inchangé : ses tons 400
+    // atteignent déjà 5,37:1 à 7,87:1.
+    success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    warning: "bg-amber-500/15 text-amber-800 dark:text-amber-400",
+    danger: "bg-red-500/15 text-red-700 dark:text-red-400",
     brand: "bg-brand/15 text-brand",
   };
   return (

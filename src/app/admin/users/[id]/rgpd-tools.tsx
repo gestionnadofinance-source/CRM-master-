@@ -109,7 +109,7 @@ export function RgpdTools({
               mais n&apos;est plus rattaché à une personne identifiable.
             </p>
             {status !== "DISABLED" ? (
-              <p className="text-sm text-amber-600 dark:text-amber-400">
+              <p className="text-sm text-amber-800 dark:text-amber-400">
                 Désactivez d&apos;abord ce compte (bouton « Compte » ci-dessus) avant de pouvoir l&apos;anonymiser.
               </p>
             ) : (

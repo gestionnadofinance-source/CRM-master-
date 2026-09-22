@@ -8,7 +8,7 @@ export default async function LoginPage() {
   // qu'un contrôle léger de présence du cookie) : évite de renvoyer un
   // utilisateur déjà connecté vers le formulaire, tout en gérant
   // proprement un cookie périmé (session expirée/révoquée) sans jamais
-  // boucler — voir src/middleware.ts.
+  // boucler — voir src/proxy.ts.
   const ctx = await getAuthContext();
   if (ctx) {
     redirect(ctx.user.mustChangePassword ? "/first-login" : "/home");

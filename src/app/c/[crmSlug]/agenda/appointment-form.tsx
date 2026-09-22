@@ -186,7 +186,7 @@ export function AppointmentForm({
           </ul>
         )}
         {entityType !== "none" && !entityId && entityQuery.trim().length >= 2 && !entityOpen && (
-          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Sélectionnez un élément dans la liste.</p>
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-400">Sélectionnez un élément dans la liste.</p>
         )}
       </div>
 

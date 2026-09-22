@@ -73,7 +73,7 @@ export function EditCrmForm({
 
       {error && <p className="text-sm text-red-500">{error}</p>}
       {success && (
-        <p className="text-sm text-emerald-600 dark:text-emerald-400">
+        <p className="text-sm text-emerald-700 dark:text-emerald-400">
           Modifications enregistrées — le nouveau nom apparaîtra pour les utilisateurs concernés dès leur prochaine
           navigation ou actualisation.
         </p>

@@ -63,7 +63,7 @@ export default async function AdminApiKeysPage() {
                     {k.revokedAt ? (
                       <span className="text-xs text-red-500">Révoquée le {formatDate(k.revokedAt)}</span>
                     ) : (
-                      <span className="text-xs text-emerald-600 dark:text-emerald-400">Active</span>
+                      <span className="text-xs text-emerald-700 dark:text-emerald-400">Active</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">

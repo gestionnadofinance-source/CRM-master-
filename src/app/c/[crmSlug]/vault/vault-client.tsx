@@ -596,7 +596,7 @@ export function AdminVaultPanel({ crmId, members }: { crmId: string; members: Me
           )}
           {exportError && <p className="text-sm text-red-500">{exportError}</p>}
           {exportSuccess && (
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">
               Tableau généré et déposé dans le dossier « Comptabilité » de {selected.firstName}.
             </p>
           )}

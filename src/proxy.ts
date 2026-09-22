@@ -15,6 +15,10 @@ const PRE_AUTH_PATHS = ["/login"];
 const POST_AUTH_ONLY_PATHS = ["/first-login"];
 
 /**
+ * Nommé `proxy` et non `middleware` : Next.js 16 a renommé cette convention de
+ * fichier et déprécié l'ancienne, qui disparaîtra à la version suivante. Le
+ * rôle, lui, est identique.
+ *
  * Garde-fou léger au niveau du edge : redirige selon la simple présence du
  * cookie de session. La validation forte (session non expirée/révoquée,
  * permissions, accès CRM) est systématiquement refaite côté serveur
@@ -33,7 +37,7 @@ function withPathnameHeader(request: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
-export function middleware(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (

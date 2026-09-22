@@ -192,7 +192,7 @@ Des administrateurs supplémentaires se créent ensuite depuis
   (`SESSION_TTL_HOURS`, 12h par défaut).
 - **Identifiants gérés par l'administrateur** : un admin crée chaque
   compte avec un mot de passe temporaire ; l'utilisateur doit le
-  remplacer avant tout accès (appliqué à la fois par le middleware et par
+  remplacer avant tout accès (appliqué à la fois par `src/proxy.ts` et par
   `requireActiveAuth()` côté serveur — jamais uniquement par un masquage
   d'interface). Il n'y a pas de « mot de passe oublié » en self-service :
   depuis `/admin/users/[id]`, un administrateur peut à tout moment
@@ -201,11 +201,12 @@ Des administrateurs supplémentaires se créent ensuite depuis
   — les deux révoquent immédiatement toutes ses sessions actives.
 - **Limitation des tentatives** : 5 échecs par compte / 20 par IP sur une
   fenêtre de 15 minutes.
-- **Protection des routes** : garde légère au niveau du middleware
-  (présence du cookie de session) doublée d'une vérification complète
-  côté serveur sur chaque page/route/action (`requireAuth`,
-  `requireActiveAuth`, `requireCrmAccess`) — le middleware seul n'est
-  jamais considéré comme suffisant.
+- **Protection des routes** : garde légère au niveau du edge
+  (`src/proxy.ts` — la convention `middleware` de Next.js, renommée
+  `proxy` en version 16 : présence du cookie de session) doublée d'une
+  vérification complète côté serveur sur chaque page/route/action
+  (`requireAuth`, `requireActiveAuth`, `requireCrmAccess`) — cette garde
+  n'est jamais considérée comme suffisante à elle seule.
 - **Mots de passe** : minimum 10 caractères, majuscule + minuscule +
   chiffre requis, validé côté serveur avec `zod` (jamais uniquement côté
   client).

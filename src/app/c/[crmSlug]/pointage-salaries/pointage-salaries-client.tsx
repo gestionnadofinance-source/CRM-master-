@@ -220,7 +220,7 @@ export function PointageSalariesClient({ crmId, chantiers }: { crmId: string; ch
         </Card>
       )}
       {notice && (
-        <p className={noticeHasFailures ? "text-sm text-amber-600 dark:text-amber-400" : "text-sm text-emerald-600 dark:text-emerald-400"}>
+        <p className={noticeHasFailures ? "text-sm text-amber-800 dark:text-amber-400" : "text-sm text-emerald-700 dark:text-emerald-400"}>
           {notice}
         </p>
       )}

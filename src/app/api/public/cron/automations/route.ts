@@ -24,7 +24,7 @@ function timingSafeStringEqual(a: string, b: string): boolean {
  * Point d'entrée cron pour le moteur d'automatisations.
  *
  * IMPORTANT — emplacement de la route : ce handler vit sous `/api/public/...`
- * (et non `/api/cron/...`) car `src/middleware.ts` (non modifiable depuis ce
+ * (et non `/api/cron/...`) car `src/proxy.ts` (non modifiable depuis ce
  * module) exige un cookie de session sur toute route qui ne commence pas par
  * `/api/public`, `/book/`, `/_next` ou `/favicon`. Un ordonnanceur externe
  * n'a jamais de session navigateur : sous `/api/cron`, cette route aurait été

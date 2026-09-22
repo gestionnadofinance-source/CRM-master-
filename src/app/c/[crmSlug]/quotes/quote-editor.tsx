@@ -331,7 +331,7 @@ export function QuoteEditor({
       </div>
 
       {error && <p className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-500">{error}</p>}
-      {pdfNotice && <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400">{pdfNotice}</p>}
+      {pdfNotice && <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">{pdfNotice}</p>}
 
       {quote && nextStatuses.length > 0 && canManage && (
         <div className="flex flex-wrap items-center gap-2">
@@ -401,10 +401,10 @@ export function QuoteEditor({
                   </div>
                 </div>
                 {entityType === "client" && clients.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Aucun client dans ce CRM.</p>
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-400">Aucun client dans ce CRM.</p>
                 )}
                 {entityType === "prospect" && prospects.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Aucun prospect dans ce CRM.</p>
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-400">Aucun prospect dans ce CRM.</p>
                 )}
               </div>
               <div>

@@ -148,7 +148,7 @@ function PasswordModal({ userId, open, onClose }: { userId: string; open: boolea
             <Button type="submit" size="sm" disabled={pending}>
               Définir ce mot de passe
             </Button>
-            {customSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">Mot de passe défini.</p>}
+            {customSuccess && <p className="text-xs text-emerald-700 dark:text-emerald-400">Mot de passe défini.</p>}
           </form>
         </div>
 

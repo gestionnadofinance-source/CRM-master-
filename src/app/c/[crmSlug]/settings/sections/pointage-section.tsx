@@ -48,7 +48,7 @@ export function PointageSection({ crmId, initial }: { crmId: string; initial: Po
           </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
-          {success && <p className="text-sm text-emerald-600 dark:text-emerald-400">Enregistré.</p>}
+          {success && <p className="text-sm text-emerald-700 dark:text-emerald-400">Enregistré.</p>}
 
           <div className="flex justify-end border-t border-border pt-4">
             <Button type="submit" disabled={pending}>

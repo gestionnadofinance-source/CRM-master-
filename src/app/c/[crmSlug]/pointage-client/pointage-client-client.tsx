@@ -198,7 +198,7 @@ export function PointageClientSheetClient({ crmId, chantiers }: { crmId: string;
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Déposer au coffre-fort
               </Button>
             </div>
-            {notice && <p className="text-sm text-emerald-600 dark:text-emerald-400">{notice}</p>}
+            {notice && <p className="text-sm text-emerald-700 dark:text-emerald-400">{notice}</p>}
             {error && <p className="text-sm text-red-500">{error}</p>}
           </Card>
         </>
