@@ -16,29 +16,29 @@ import { QUOTE_STATUS_TRANSITIONS } from "@/server/quotes/status";
 import { revalidatePath } from "next/cache";
 import { QuoteStatus } from "@prisma/client";
 import { advanceProspectOpportunityStage } from "@/server/pipeline/actions";
-import { MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
+import { MAX_DECIMAL_10_2, MAX_DECIMAL_12_2, MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, outOfRange, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
 const quoteItemInputSchema = z.object({
-  id: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).optional(), // présent = ligne existante (informatif seulement, on réécrit toujours)
-  designation: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).min(1, "La désignation est obligatoire."),
-  quantity: z.coerce.number().positive("La quantité doit être strictement positive."),
-  unitPriceHt: z.coerce.number().min(0, "Le prix unitaire doit être positif ou nul."),
-  vatRateId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le taux de TVA est obligatoire."),
+  id: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(), // présent = ligne existante (informatif seulement, on réécrit toujours)
+  designation: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "La désignation est obligatoire."),
+  quantity: z.coerce.number().positive("La quantité doit être strictement positive.").max(MAX_DECIMAL_10_2, outOfRange(MAX_DECIMAL_10_2)),
+  unitPriceHt: z.coerce.number().min(0, "Le prix unitaire doit être positif ou nul.").max(MAX_DECIMAL_12_2, outOfRange(MAX_DECIMAL_12_2)),
+  vatRateId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le taux de TVA est obligatoire."),
 });
 
 const quoteSaveSchema = z
   .object({
-    clientId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
-    prospectId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
-    object: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "L'objet est obligatoire."),
+    clientId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+    prospectId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+    object: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "L'objet est obligatoire."),
     issueDate: z.coerce.date({ errorMap: () => ({ message: "Date d'émission invalide." }) }),
     validUntil: z.coerce.date({ errorMap: () => ({ message: "Date de validité invalide." }) }),
-    conditions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable().optional(),
-    mentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable().optional(),
+    conditions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable().optional(),
+    mentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable().optional(),
     items: z.array(quoteItemInputSchema).min(1, "Ajoutez au moins une ligne de devis."),
   })
   .refine((data) => data.validUntil >= data.issueDate, {
@@ -192,6 +192,14 @@ export async function saveQuote(
   const vatRatesById = new Map(vatRates.map((v) => [v.id, Number(v.rate)]));
 
   const totals = computeTotals(input.items, vatRatesById);
+
+  // Chaque ligne est bornée séparément, mais c'est bien leur somme qui part
+  // dans totalHt/totalVat/totalTtc, en Decimal(12, 2) : sans ce contrôle,
+  // un devis fait de lignes individuellement valides peut encore déborder
+  // la colonne et faire échouer l'écriture côté base.
+  if ([totals.totalHt, totals.totalVat, totals.totalTtc].some((v) => v > MAX_DECIMAL_12_2)) {
+    return { ok: false, error: `Le total du devis dépasse le maximum autorisé (${MAX_DECIMAL_12_2.toLocaleString("fr-FR")} €).` };
+  }
 
   if (!quoteId) {
     const number = await generateQuoteNumber(tenant.crmId);

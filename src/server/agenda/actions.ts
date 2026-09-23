@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 import { AppointmentStatus } from "@prisma/client";
 import { advanceProspectOpportunityStage } from "@/server/pipeline/actions";
 import { removeStorageKeys } from "@/lib/storage";
-import { MAX_CODE, MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
+import { MAX_CODE, MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 // ============================================================================
 // Helpers
@@ -45,8 +45,8 @@ export interface AgendaActionResult {
 // ============================================================================
 
 const rangeSchema = z.object({
-  start: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
-  end: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  start: z.string().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
+  end: z.string().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
 });
 
 export async function listAppointmentsInRange(crmId: string, startISO: string, endISO: string) {
@@ -215,16 +215,16 @@ export async function searchClientsAndProspects(crmId: string, query: string) {
 const appointmentInputSchema = z
   .object({
     title: z.string().trim().min(1, "Le titre est obligatoire.").max(200),
-    clientId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
-    prospectId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
-    ownerId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le commercial est obligatoire."),
-    participantIds: z.array(z.string().max(MAX_ID, tooLong(MAX_ID))),
-    startAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1, "La date de début est obligatoire."),
-    endAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1, "La date de fin est obligatoire."),
-    location: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-    phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
-    email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-    notes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
+    clientId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+    prospectId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+    ownerId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le commercial est obligatoire."),
+    participantIds: z.array(z.string().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE)),
+    startAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "La date de début est obligatoire."),
+    endAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "La date de fin est obligatoire."),
+    location: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+    phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+    email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+    notes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
   })
   .refine((d) => !(d.clientId && d.prospectId), {
     message: "Choisissez un client OU un prospect, pas les deux.",
@@ -484,12 +484,12 @@ export async function deleteAppointment(
 }
 
 const reportInputSchema = z.object({
-  reportSummary: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
-  reportNeeds: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
-  reportBudget: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-  reportNextStep: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).nullable(),
-  reportFollowUpAt: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
-  reportNotes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
+  reportSummary: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  reportNeeds: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  reportBudget: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  reportNextStep: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  reportFollowUpAt: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  reportNotes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
   markCompleted: z.boolean(),
 });
 

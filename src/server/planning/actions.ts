@@ -7,7 +7,7 @@ import { requireCrmAccess, requireOperationsAccess, assertBelongsToCrm } from "@
 import { logActivity } from "@/server/activity";
 import { publishToCrm } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
-import { MAX_ID, tooLong } from "@/lib/validation";
+import { MAX_ID, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 export interface ActionResult {
   ok: boolean;
@@ -261,7 +261,7 @@ export async function deleteChantier(crmId: string, chantierId: string, actorCtx
 }
 
 const assignSchema = z.object({
-  userId: z.string().max(MAX_ID, tooLong(MAX_ID)).min(1, "Sélectionnez une personne."),
+  userId: z.string().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Sélectionnez une personne."),
   startDate: z.coerce.date().optional().or(z.literal("").transform(() => undefined)),
   endDate: z.coerce.date().optional().or(z.literal("").transform(() => undefined)),
   note: z.string().trim().max(500).optional().or(z.literal("")),

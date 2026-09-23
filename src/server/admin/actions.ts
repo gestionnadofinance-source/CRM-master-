@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/server/auth/session";
 import { CrmRole, AccessCategory } from "@/server/permissions";
 import { hashPassword, generateTemporaryPassword } from "@/lib/crypto";
-import { passwordSchema } from "@/lib/validation";
+import { passwordSchema, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 import { sendEmail, baseEmailLayout } from "@/lib/email";
 import { getServerEnv } from "@/lib/env";
 import { logActivity } from "@/server/activity";
@@ -31,7 +31,7 @@ export interface ActionResult {
 // ---------------------------------------------------------------------------
 
 const accessEntrySchema = z.object({
-  crmId: z.string().max(MAX_ID, tooLong(MAX_ID)).min(1),
+  crmId: z.string().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
   role: z.nativeEnum(CrmRole),
   category: z.nativeEnum(AccessCategory),
   // Profil "chef de chantier" (catégorie OUVRIER uniquement) : voir
@@ -52,11 +52,11 @@ const accessEntrySchema = z.object({
 });
 
 const createUserSchema = z.object({
-  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
-  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).toLowerCase().email("Adresse email invalide."),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).toLowerCase().email("Adresse email invalide."),
   isGlobalAdmin: z.boolean(),
-  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
   access: z.array(accessEntrySchema),
 });
 
@@ -175,8 +175,8 @@ export async function createUser(formData: FormData): Promise<CreateUserResult> 
 }
 
 const updateUserSchema = z.object({
-  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
   isGlobalAdmin: z.boolean(),
   access: z.array(accessEntrySchema),
 });
@@ -405,10 +405,10 @@ export async function deleteUserActivityHistory(userId: string, confirmEmail: st
 // ---------------------------------------------------------------------------
 
 const createCrmSchema = z.object({
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
-  slug: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).optional(),
-  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
-  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).optional(),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
+  slug: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
+  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(),
 });
 
 export interface CreateCrmResult extends ActionResult {
@@ -446,9 +446,9 @@ export async function createCrm(formData: FormData): Promise<CreateCrmResult> {
 }
 
 const updateCrmSchema = z.object({
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
-  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).optional(),
-  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
+  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
   isActive: z.boolean(),
 });
 

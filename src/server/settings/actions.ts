@@ -10,7 +10,7 @@ import { logActivity } from "@/server/activity";
 import { publishToCrm } from "@/lib/realtime";
 import { CustomFieldEntity, CustomFieldType, TagScope } from "@prisma/client";
 import { isPubliclySafeHttpsUrl } from "@/lib/url-safety";
-import { MAX_CODE, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
+import { MAX_CODE, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS, MAX_INT4, outOfRange } from "@/lib/validation";
 
 export interface ActionResult {
   ok: boolean;
@@ -49,20 +49,20 @@ function friendlyConstraintError(err: unknown, fallback: string): ActionResult {
 // ---------------------------------------------------------------------------
 
 const companySettingsSchema = z.object({
-  legalName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)),
-  logoUrl: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)),
-  address: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)),
-  postalCode: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)),
-  city: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)),
-  siret: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)),
-  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)),
-  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)),
-  website: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)),
-  legalMentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)),
-  ape: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)),
-  urssafOffice: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)),
-  legalRepresentative: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)),
-  missionOrderLegalMentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)),
+  legalName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  logoUrl: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  address: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  postalCode: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  city: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  siret: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  website: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  legalMentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  ape: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  urssafOffice: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  legalRepresentative: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  missionOrderLegalMentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
 });
 
 export async function updateCompanySettings(crmId: string, crmSlug: string, formData: FormData): Promise<ActionResult> {
@@ -106,9 +106,9 @@ export async function updateCompanySettings(crmId: string, crmSlug: string, form
 // ---------------------------------------------------------------------------
 
 const stageSchema = z.object({
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
-  order: z.coerce.number().int(),
-  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
+  order: z.coerce.number().int().min(0).max(MAX_INT4, outOfRange(MAX_INT4)),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
   isWon: z.boolean(),
   isLost: z.boolean(),
 });
@@ -171,7 +171,7 @@ export async function deletePipelineStage(crmId: string, crmSlug: string, stageI
 // Sources
 // ---------------------------------------------------------------------------
 
-const sourceSchema = z.object({ name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."), order: z.coerce.number().int() });
+const sourceSchema = z.object({ name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."), order: z.coerce.number().int() });
 
 export async function createSource(crmId: string, crmSlug: string, formData: FormData): Promise<ActionResult> {
   const { ctx } = await guard(crmId);
@@ -223,9 +223,9 @@ export async function deleteSource(crmId: string, crmSlug: string, sourceId: str
 // ---------------------------------------------------------------------------
 
 const tagSchema = z.object({
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
   scope: z.nativeEnum(TagScope),
-  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
 });
 
 export async function createTag(crmId: string, crmSlug: string, formData: FormData): Promise<ActionResult> {
@@ -262,11 +262,11 @@ export async function deleteTag(crmId: string, crmSlug: string, tagId: string): 
 
 const customFieldSchema = z.object({
   entityType: z.nativeEnum(CustomFieldEntity),
-  label: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le libellé est obligatoire."),
+  label: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le libellé est obligatoire."),
   fieldType: z.nativeEnum(CustomFieldType),
-  options: z.array(z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT))).transform((arr) => arr.filter(Boolean)),
+  options: z.array(z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE)).transform((arr) => arr.filter(Boolean)),
   required: z.boolean(),
-  order: z.coerce.number().int(),
+  order: z.coerce.number().int().min(0).max(MAX_INT4, outOfRange(MAX_INT4)),
 });
 
 export async function createCustomField(crmId: string, crmSlug: string, formData: FormData): Promise<ActionResult> {
@@ -301,7 +301,7 @@ export async function deleteCustomField(crmId: string, crmSlug: string, fieldId:
 // ---------------------------------------------------------------------------
 
 const vatRateSchema = z.object({
-  label: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le libellé est obligatoire."),
+  label: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le libellé est obligatoire."),
   rate: z.coerce.number().min(0).max(100),
   isDefault: z.boolean(),
 });
@@ -365,7 +365,7 @@ const bookingSchema = z.object({
   minNoticeHours: z.coerce.number().int().min(0).max(720),
   maxAdvanceDays: z.coerce.number().int().min(1).max(365),
   balancedDistribution: z.boolean(),
-  introMessage: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)),
+  introMessage: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
 });
 
 export async function updateBookingSettings(crmId: string, crmSlug: string, formData: FormData): Promise<ActionResult> {
@@ -402,12 +402,12 @@ export async function updateBookingSettings(crmId: string, crmSlug: string, form
 // ---------------------------------------------------------------------------
 
 const quoteTemplateSchema = z.object({
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
-  logoUrl: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)),
-  primaryColor: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
-  mentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)),
-  conditions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)),
-  footer: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
+  logoUrl: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  primaryColor: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
+  mentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  conditions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  footer: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
   isDefault: z.boolean(),
 });
 
@@ -470,9 +470,9 @@ const emailTemplateSchema = z.object({
     .toLowerCase()
     .min(1, "La clé est obligatoire.")
     .regex(/^[a-z0-9_.-]+$/, "La clé ne doit contenir que des lettres minuscules, chiffres, - _ ."),
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
-  subject: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "L'objet est obligatoire."),
-  body: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).min(1, "Le corps est obligatoire."),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
+  subject: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "L'objet est obligatoire."),
+  body: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le corps est obligatoire."),
 });
 
 export async function createEmailTemplate(crmId: string, crmSlug: string, formData: FormData): Promise<ActionResult> {

@@ -12,7 +12,7 @@ import { publishToCrm } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { ClientStatus } from "@prisma/client";
 import { removeStorageKeys } from "@/lib/storage";
-import { MAX_CODE, MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
+import { MAX_CODE, MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 function emptyToNull(v: FormDataEntryValue | null): string | null {
   const s = v == null ? "" : String(v).trim();
@@ -20,25 +20,25 @@ function emptyToNull(v: FormDataEntryValue | null): string | null {
 }
 
 const clientInputSchema = z.object({
-  company: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "L'entreprise est obligatoire."),
-  sector: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
-  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).email("Adresse email invalide.").nullable().or(z.literal(null)),
-  address: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).nullable(),
-  activity: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-  size: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
+  company: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "L'entreprise est obligatoire."),
+  sector: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).email("Adresse email invalide.").nullable().or(z.literal(null)),
+  address: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  activity: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  size: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
   siret: z
     .string()
     .trim()
     .regex(/^\d{14}$/, "Le SIRET doit comporter 14 chiffres.")
     .nullable(),
   status: z.nativeEnum(ClientStatus),
-  sourceId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
-  ownerId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le commercial est obligatoire."),
-  notes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
-  tagIds: z.array(z.string().max(MAX_ID, tooLong(MAX_ID))),
+  sourceId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  ownerId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le commercial est obligatoire."),
+  notes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  tagIds: z.array(z.string().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE)),
 });
 
 export type ClientInput = z.infer<typeof clientInputSchema>;
@@ -271,11 +271,11 @@ export async function deleteClient(crmId: string, clientId: string, actorCtx?: A
 // ---------------------------------------------------------------------------
 
 const contactSchema = z.object({
-  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
-  role: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
-  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
-  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).email("Adresse email invalide.").nullable().or(z.literal(null)),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
+  role: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).nullable(),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).email("Adresse email invalide.").nullable().or(z.literal(null)),
 });
 
 export async function addClientContact(crmId: string, clientId: string, formData: FormData): Promise<ClientActionResult> {

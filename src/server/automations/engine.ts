@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/server/activity";
 import { publishToCrm, publishToUser } from "@/lib/realtime";
 import type { AutomationRule, AutomationTrigger } from "@prisma/client";
-import { MAX_LONG, MAX_SHORT, tooLong } from "@/lib/validation";
+import { MAX_LONG, MAX_SHORT, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 // ============================================================================
 // Moteur d'automatisations — CRM Master
@@ -130,8 +130,8 @@ export interface AutomationTriggerContext {
 }
 
 const createTaskConfigSchema = z.object({
-  title: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1),
-  description: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).optional(),
+  title: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
+  description: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
   assignTo: z.enum(["OWNER", "CREATOR"]).optional(),
   dueInDays: z.coerce.number().int().min(0).max(3650).optional(),

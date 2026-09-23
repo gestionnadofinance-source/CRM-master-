@@ -9,7 +9,7 @@ import { logActivity } from "@/server/activity";
 import { publishToCrm } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { AvailabilityExceptionType } from "@prisma/client";
-import { MAX_CODE, MAX_ID, tooLong } from "@/lib/validation";
+import { MAX_CODE, MAX_ID, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 export interface AvailabilityActionResult {
   ok: boolean;
@@ -55,7 +55,7 @@ export async function listAvailabilityRules(crmId: string, userId: string) {
 
 const ruleInputSchema = z
   .object({
-    userId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1),
+    userId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
     weekday: z.coerce.number().int().min(0).max(6),
     startTime: z.string().regex(timePattern, "Heure de début invalide (HH:MM)."),
     endTime: z.string().regex(timePattern, "Heure de fin invalide (HH:MM)."),
@@ -150,10 +150,10 @@ export async function listAvailabilityExceptions(crmId: string, userId: string) 
 
 const exceptionInputSchema = z
   .object({
-    userId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1),
+    userId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
     type: z.nativeEnum(AvailabilityExceptionType),
-    startAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
-    endAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+    startAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
+    endAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
     allDay: z.boolean(),
     reason: z.string().trim().max(500).nullable(),
   })

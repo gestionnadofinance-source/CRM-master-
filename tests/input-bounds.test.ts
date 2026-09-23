@@ -15,7 +15,8 @@ import { prisma } from "@/lib/prisma";
 import { AccessCategory, CrmRole } from "@/server/permissions";
 import type { AuthContext, SessionUser } from "@/server/auth/session";
 import { createClient } from "@/server/clients/actions";
-import { MAX_LONG, MAX_SHORT } from "@/lib/validation";
+import { saveQuote } from "@/server/quotes/actions";
+import { CONTROL_CHARS_MESSAGE, MAX_DECIMAL_10_2, MAX_LONG, MAX_SHORT } from "@/lib/validation";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -47,6 +48,8 @@ async function wipeFixtures(): Promise<void> {
 describe("bornes de longueur des champs texte", () => {
   let crm: Crm;
   let owner: User;
+  let vatRateId: string;
+  let clientId: string;
 
   beforeAll(async () => {
     await wipeFixtures();
@@ -57,6 +60,10 @@ describe("bornes de longueur des champs texte", () => {
     await prisma.userCrmAccess.create({
       data: { userId: owner.id, crmId: crm.id, role: CrmRole.MANAGER, category: AccessCategory.COMMERCIAL },
     });
+    // Un devis a besoin d'un taux de TVA et d'une partie (client ou prospect)
+    // du même CRM : le contrôle des totaux vient après leur résolution.
+    vatRateId = (await prisma.vatRate.create({ data: { crmId: crm.id, label: "__TEST__ 20%", rate: 20 } })).id;
+    clientId = (await prisma.client.create({ data: { crmId: crm.id, company: "__TEST__ Destinataire", ownerId: owner.id } })).id;
   });
 
   afterAll(wipeFixtures);
@@ -99,5 +106,47 @@ describe("bornes de longueur des champs texte", () => {
     fd.set("ownerId", owner.id);
     const res = await updateClient(crm.id, created.clientId!, fd, toCtx(owner));
     expect(res.ok).toBe(false);
+  });
+  // --- NEW-001 : caractères de contrôle -----------------------------------
+  it("refuse un octet nul dans un champ texte, au lieu de le laisser échouer en base", async () => {
+    const res = await create({ company: "Entreprise\u0000injectée" });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe(CONTROL_CHARS_MESSAGE);
+  });
+
+  it("refuse aussi les autres caractères de contrôle", async () => {
+    for (const ch of ["\u0001", "\u0007", "\u001F"]) {
+      const res = await create({ company: `Entreprise${ch}x` });
+      expect(res.ok, JSON.stringify(ch)).toBe(false);
+    }
+  });
+
+  it("laisse passer sauts de ligne, retours chariot et tabulations dans un champ multiligne", async () => {
+    const res = await create({ company: "__TEST__ Multiligne", notes: "ligne 1\nligne 2\r\n\tindentée" });
+    expect(res.ok).toBe(true);
+  });
+
+  // --- NEW-002 : bornes numériques ----------------------------------------
+  it("refuse une quantité de ligne au-delà de la capacité de la colonne", async () => {
+    const res = await saveQuote(crm.id, null, {
+      clientId, prospectId: null, object: "__TEST__ Devis hors bornes",
+      issueDate: "2026-09-23", validUntil: "2026-10-23",
+      items: [{ designation: "L", quantity: 1e9, unitPriceHt: 100, vatRateId: vatRateId }],
+    }, toCtx(owner));
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/dépasse le maximum autorisé/);
+  });
+
+  it("refuse un devis dont le TOTAL déborde, même avec des lignes valides une à une", async () => {
+    // Chaque ligne tient dans sa colonne ; leur somme, elle, dépasse le
+    // Decimal(12, 2) des totaux — c'est le cas que borner les lignes seules
+    // ne couvre pas.
+    const line = { designation: "L", quantity: MAX_DECIMAL_10_2, unitPriceHt: 1000, vatRateId: vatRateId };
+    const res = await saveQuote(crm.id, null, {
+      clientId, prospectId: null, object: "__TEST__ Devis total hors bornes",
+      issueDate: "2026-09-23", validUntil: "2026-10-23", items: [line],
+    }, toCtx(owner));
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/total du devis dépasse/);
   });
 });
