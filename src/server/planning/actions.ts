@@ -31,9 +31,9 @@ function revalidatePlanning(crmSlug: string): void {
 const decimalField = z.coerce.number().min(0).max(99999.99).optional().or(z.literal("").transform(() => undefined));
 
 const chantierSchema = z.object({
-  name: z.string().trim().min(1, "Le nom du chantier est requis.").max(200),
-  description: z.string().trim().max(2000).optional().or(z.literal("")),
-  address: z.string().trim().max(300).optional().or(z.literal("")),
+  name: z.string().trim().min(1, "Le nom du chantier est requis.").max(200).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE),
+  description: z.string().trim().max(2000).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
+  address: z.string().trim().max(300).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
@@ -49,15 +49,15 @@ const chantierSchema = z.object({
   mealAllowance: decimalField,
   clothingBonus: decimalField,
 
-  missionNature: z.string().trim().max(200).optional().or(z.literal("")),
-  clientName: z.string().trim().max(200).optional().or(z.literal("")),
-  siteContactName: z.string().trim().max(200).optional().or(z.literal("")),
-  siteContactPhone: z.string().trim().max(50).optional().or(z.literal("")),
-  importantDocuments: z.string().trim().max(1000).optional().or(z.literal("")),
+  missionNature: z.string().trim().max(200).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
+  clientName: z.string().trim().max(200).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
+  siteContactName: z.string().trim().max(200).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
+  siteContactPhone: z.string().trim().max(50).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
+  importantDocuments: z.string().trim().max(1000).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
 });
 
 /**
- * Vue commerciale/admin (rôle MANAGER/USER, catégorie COMMERCIAL, ou
+ * Vue d'administration (rôle MANAGER/USER, catégorie SECRETAIRE, ou
  * administrateur global) : tous les chantiers du CRM, pour pouvoir
  * affecter qui que ce soit. Vue Ouvrier : uniquement les chantiers
  * auxquels la personne est elle-même affectée — jamais les données de
@@ -264,9 +264,9 @@ const assignSchema = z.object({
   userId: z.string().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Sélectionnez une personne."),
   startDate: z.coerce.date().optional().or(z.literal("").transform(() => undefined)),
   endDate: z.coerce.date().optional().or(z.literal("").transform(() => undefined)),
-  note: z.string().trim().max(500).optional().or(z.literal("")),
+  note: z.string().trim().max(500).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
 
-  workerAddress: z.string().trim().max(300).optional().or(z.literal("")),
+  workerAddress: z.string().trim().max(300).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
   kmRate: decimalField,
   distanceKm: decimalField,
   travelHourlyRate: decimalField,

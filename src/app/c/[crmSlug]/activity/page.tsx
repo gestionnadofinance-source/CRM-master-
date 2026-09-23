@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAuth } from "@/server/auth/session";
-import { requireCrmAccessBySlug, requireCommercial } from "@/server/tenant";
+import { requireCrmAccessBySlug, requireOperationsCategory } from "@/server/tenant";
 import { prisma } from "@/lib/prisma";
 import { Card, Badge } from "@/components/ui/card";
 import { Input, Select, Label } from "@/components/ui/input";
@@ -45,7 +45,7 @@ export default async function CrmActivityPage({
   const sp = await searchParams;
   const ctx = await requireAuth();
   const tenant = await requireCrmAccessBySlug(ctx, crmSlug);
-  requireCommercial(tenant, { allowSecretaire: true });
+  requireOperationsCategory(tenant);
 
   const userId = one(sp, "user");
   const entityType = one(sp, "entityType");

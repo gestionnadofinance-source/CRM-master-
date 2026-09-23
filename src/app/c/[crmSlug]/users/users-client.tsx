@@ -196,7 +196,6 @@ function CategoryRoleFields({
       <div>
         <Label htmlFor="category">Profil</Label>
         <Select id="category" name="category" value={category} onChange={(e) => setCategory(e.target.value as Category)}>
-          <option value="COMMERCIAL">Commercial</option>
           <option value="OUVRIER">Ouvrier</option>
           <option value="SECRETAIRE">Secrétaire</option>
         </Select>
@@ -245,14 +244,14 @@ function CreateUserModal({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CreateCrmUserResult | null>(null);
-  const [category, setCategory] = useState<Category>("COMMERCIAL");
+  const [category, setCategory] = useState<Category>("OUVRIER");
   const [isForeman, setIsForeman] = useState(false);
   const [copied, setCopied] = useState(false);
 
   function reset() {
     setError(null);
     setResult(null);
-    setCategory("COMMERCIAL");
+    setCategory("OUVRIER");
     setIsForeman(false);
   }
 

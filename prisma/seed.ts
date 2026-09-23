@@ -1,7 +1,7 @@
 /**
  * Initialisation minimale de CRM Master : les 5 CRM prévus par le cahier
- * des charges, leur configuration de base (pipeline, sources, TVA,
- * réservation), et le premier administrateur global.
+ * des charges, leur configuration de base, et le premier administrateur
+ * global.
  *
  * Usage : npm run seed
  * Variables optionnelles : ADMIN_EMAIL, ADMIN_FIRST_NAME, ADMIN_LAST_NAME, ADMIN_PASSWORD
@@ -41,42 +41,12 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-const DEFAULT_STAGES = [
-  { name: "Nouveau prospect", order: 0, color: "#94a3b8" },
-  { name: "Contact établi", order: 1, color: "#60a5fa" },
-  { name: "Rendez-vous", order: 2, color: "#38bdf8" },
-  { name: "Devis", order: 3, color: "#a78bfa" },
-  { name: "Négociation", order: 4, color: "#fbbf24" },
-  { name: "Gagné", order: 5, color: "#34d399", isWon: true },
-  { name: "Perdu", order: 6, color: "#f87171", isLost: true },
-];
-
-const DEFAULT_SOURCES = [
-  "Site internet",
-  "Téléphone",
-  "Email",
-  "Prospection",
-  "Recommandation",
-  "Réseaux sociaux",
-  "Publicité",
-  "Salon",
-  "Ancien client",
-  "Autre",
-];
-
-const DEFAULT_VAT_RATES = [
-  { label: "20% (taux normal)", rate: 20, isDefault: true },
-  { label: "10% (taux intermédiaire)", rate: 10, isDefault: false },
-  { label: "5,5% (taux réduit)", rate: 5.5, isDefault: false },
-  { label: "0% (exonéré)", rate: 0, isDefault: false },
-];
-
-const CRMS: { name: string; slug: string; color: string; prefix: string; description: string }[] = [
-  { name: "Fidem Froid Clim", slug: "fidem-froid-clim", color: "#2563eb", prefix: "FFC", description: "Installation et dépannage froid & climatisation" },
-  { name: "Fidem Maintenance", slug: "fidem-maintenance", color: "#0891b2", prefix: "FM", description: "Contrats de maintenance technique" },
-  { name: "Fitness Park Modge", slug: "fitness-park-modge", color: "#dc2626", prefix: "FPM", description: "Club de sport" },
-  { name: "Association", slug: "association", color: "#7c3aed", prefix: "ASSO", description: "Gestion associative" },
-  { name: "Société de Communication", slug: "societe-communication", color: "#d97706", prefix: "COM", description: "Agence de communication" },
+const CRMS: { name: string; slug: string; color: string; description: string }[] = [
+  { name: "Fidem Froid Clim", slug: "fidem-froid-clim", color: "#2563eb", description: "Installation et dépannage froid & climatisation" },
+  { name: "Fidem Maintenance", slug: "fidem-maintenance", color: "#0891b2", description: "Contrats de maintenance technique" },
+  { name: "Fitness Park Modge", slug: "fitness-park-modge", color: "#dc2626", description: "Club de sport" },
+  { name: "Association", slug: "association", color: "#7c3aed", description: "Gestion associative" },
+  { name: "Société de Communication", slug: "societe-communication", color: "#d97706", description: "Agence de communication" },
 ];
 
 async function main() {
@@ -101,40 +71,10 @@ async function main() {
       create: { crmId: crm.id, legalName: crmDef.name },
     });
 
-    await prisma.bookingSettings.upsert({
-      where: { crmId: crm.id },
-      update: {},
-      create: { crmId: crm.id, publicSlug: crmDef.slug },
-    });
 
-    for (const stage of DEFAULT_STAGES) {
-      const existing = await prisma.pipelineStage.findFirst({ where: { crmId: crm.id, name: stage.name } });
-      if (!existing) {
-        await prisma.pipelineStage.create({ data: { crmId: crm.id, ...stage } });
-      }
-    }
 
-    for (const [order, name] of DEFAULT_SOURCES.entries()) {
-      await prisma.source.upsert({
-        where: { crmId_name: { crmId: crm.id, name } },
-        update: {},
-        create: { crmId: crm.id, name, order },
-      });
-    }
 
-    for (const vat of DEFAULT_VAT_RATES) {
-      await prisma.vatRate.upsert({
-        where: { crmId_label: { crmId: crm.id, label: vat.label } },
-        update: {},
-        create: { crmId: crm.id, label: vat.label, rate: vat.rate, isDefault: vat.isDefault },
-      });
-    }
 
-    await prisma.quoteCounter.upsert({
-      where: { crmId_prefix_year: { crmId: crm.id, prefix: crmDef.prefix, year: new Date().getFullYear() } },
-      update: {},
-      create: { crmId: crm.id, prefix: crmDef.prefix, year: new Date().getFullYear(), lastNumber: 0 },
-    });
 
     console.log(`  ✓ CRM prêt : ${crmDef.name}`);
   }

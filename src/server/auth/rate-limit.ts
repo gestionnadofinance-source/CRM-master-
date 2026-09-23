@@ -41,7 +41,7 @@ const RETENTION_DAYS = 90;
  * donnée à caractère personnel) n'ont plus d'utilité fonctionnelle et
  * n'ont pas vocation à s'accumuler indéfiniment. Appelée depuis la route
  * cron déjà programmée quotidiennement (voir
- * src/app/api/public/cron/automations/route.ts).
+ * src/app/api/public/cron/purge/route.ts).
  */
 export async function purgeOldLoginAttempts(): Promise<number> {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);

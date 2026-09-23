@@ -325,7 +325,7 @@ const upsertSchema = z.object({
   travelHoursReimbursementApplied: boolField,
   mealAllowanceApplied: boolField,
   clothingBonusApplied: boolField,
-  comments: z.string().trim().max(2000).optional().or(z.literal("")),
+  comments: z.string().trim().max(2000).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
 });
 
 export async function upsertPointageEntry(
@@ -757,7 +757,7 @@ export async function emailClientTimesheet(crmId: string, chantierId: string, we
   return { ok: true };
 }
 
-const folderNameSchema = z.string().trim().min(1, "Le nom du dossier est requis.").max(150);
+const folderNameSchema = z.string().trim().min(1, "Le nom du dossier est requis.").max(150).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE);
 
 export async function depositClientTimesheet(crmId: string, chantierId: string, weekStartIso: string, folderName: string): Promise<ActionResult> {
   const ctx = await requireAuth();

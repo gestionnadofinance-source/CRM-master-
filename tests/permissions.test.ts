@@ -2,6 +2,12 @@
  * Permission model: role defaults (src/server/permissions.ts) and the
  * requireCrmAccess(ctx, crmId, permission) gate (src/server/tenant.ts) that
  * enforces them.
+ *
+ * Note : depuis le retrait du commercial, seule la catégorie COMMERCIAL —
+ * encore présente dans l'énumération Prisma, plus proposée nulle part —
+ * hérite des droits par défaut de son rôle ; OUVRIER et SECRETAIRE
+ * n'héritent de rien et passent par des contrôles de catégorie dédiés.
+ * C'est ce qui est vérifié ici.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Crm, User } from "@prisma/client";
@@ -27,17 +33,9 @@ function toCtx(user: User): AuthContext {
 }
 
 describe("effectivePermissions / hasPermission (role defaults + overrides)", () => {
-  it("USER has VIEW/CREATE/EDIT/MANAGE_* by default", () => {
+  it("USER has VIEW/CREATE/EDIT by default", () => {
     const access = { role: CrmRole.USER, category: AccessCategory.COMMERCIAL, permissions: [] as Permission[] };
-    for (const p of [
-      Permission.VIEW,
-      Permission.CREATE,
-      Permission.EDIT,
-      Permission.MANAGE_APPOINTMENTS,
-      Permission.MANAGE_QUOTES,
-      Permission.MANAGE_PROSPECTS,
-      Permission.MANAGE_CLIENTS,
-    ]) {
+    for (const p of [Permission.VIEW, Permission.CREATE, Permission.EDIT]) {
       expect(hasPermission(access, p)).toBe(true);
     }
   });
@@ -49,9 +47,17 @@ describe("effectivePermissions / hasPermission (role defaults + overrides)", () 
     }
   });
 
-  it("MANAGER has every permission by default", () => {
+  it("MANAGER adds DELETE/EXPORT/MANAGE_SETTINGS/MANAGE_USERS to the USER defaults", () => {
     const access = { role: CrmRole.MANAGER, category: AccessCategory.COMMERCIAL, permissions: [] as Permission[] };
-    for (const p of Object.values(Permission)) {
+    for (const p of [
+      Permission.VIEW,
+      Permission.CREATE,
+      Permission.EDIT,
+      Permission.DELETE,
+      Permission.EXPORT,
+      Permission.MANAGE_SETTINGS,
+      Permission.MANAGE_USERS,
+    ]) {
       expect(hasPermission(access, p)).toBe(true);
     }
   });

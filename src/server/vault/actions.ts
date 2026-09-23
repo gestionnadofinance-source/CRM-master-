@@ -10,6 +10,7 @@ import { publishToUser } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { VaultDocumentCategory } from "@prisma/client";
 import { createVaultFolderCore, moveVaultDocumentCore, moveVaultFolderCore, type ActionResult } from "@/server/vault/core";
+import { CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 export type { ActionResult };
 
@@ -77,7 +78,7 @@ export async function listVaultFoldersForUser(crmId: string, targetUserId: strin
   });
 }
 
-const folderNameSchema = z.string().trim().min(1, "Le nom du dossier est requis.").max(150);
+const folderNameSchema = z.string().trim().min(1, "Le nom du dossier est requis.").max(150).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE);
 
 /**
  * Créer un dossier est permis à un administrateur/secrétaire pour

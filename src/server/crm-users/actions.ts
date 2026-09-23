@@ -91,7 +91,7 @@ export async function createCrmUser(crmId: string, formData: FormData): Promise<
     lastName: String(formData.get("lastName") ?? "").trim(),
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
     role: String(formData.get("role") ?? "USER"),
-    category: String(formData.get("category") ?? "COMMERCIAL"),
+    category: String(formData.get("category") ?? "OUVRIER"),
     isForeman: formData.get("isForeman") === "on",
   };
   const parsed = createSchema.safeParse(raw);
@@ -193,7 +193,7 @@ export async function updateCrmUserAccess(crmId: string, targetUserId: string, f
     firstName: String(formData.get("firstName") ?? "").trim(),
     lastName: String(formData.get("lastName") ?? "").trim(),
     role: String(formData.get("role") ?? "USER"),
-    category: String(formData.get("category") ?? "COMMERCIAL"),
+    category: String(formData.get("category") ?? "OUVRIER"),
     isForeman: formData.get("isForeman") === "on",
   };
   const parsed = updateSchema.safeParse(raw);

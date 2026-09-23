@@ -21,8 +21,6 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
-    "seed:demo": "tsx prisma/seed-demo.ts",
-    "seed:demo:clear": "tsx prisma/clear-demo.ts",
     "vercel-build": "prisma generate && sh scripts/vercel-migrate.sh && tsx prisma/seed.ts && next build"
   },
   "dependencies": {

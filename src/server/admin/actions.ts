@@ -45,7 +45,7 @@ const accessEntrySchema = z.object({
   defaultHourlyRate: z.coerce.number().min(0).max(1000).default(0),
   // Montants par défaut des primes de pointage (catégorie OUVRIER
   // uniquement) — voir src/server/pointage. Ignorés pour la catégorie
-  // COMMERCIAL. (Management/zone/masque/poste sont fixées par chantier, pas
+  // OUVRIER. (Management/zone/masque/poste sont fixées par chantier, pas
   // par salarié — voir ChantierFixedAmounts — donc absentes ici.)
   defaultHousingAllowance: z.coerce.number().min(0).max(10000).default(0),
   defaultDirtAllowance: z.coerce.number().min(0).max(10000).default(5),
@@ -67,7 +67,7 @@ export interface CreateUserResult extends ActionResult {
 }
 
 /**
- * Le select "profil" d'un CRM porte 3 valeurs : COMMERCIAL, OUVRIER, ou
+ * Le select "profil" d'un espace porte 3 valeurs : OUVRIER, SECRETAIRE, ou
  * OUVRIER_FOREMAN (Ouvrier — Chef de chantier). Cette dernière se traduit
  * en category=OUVRIER + isForeman=true : le profil "chef de chantier" est
  * une variante de la catégorie Ouvrier, pas une catégorie à part.
@@ -75,7 +75,7 @@ export interface CreateUserResult extends ActionResult {
 function parseAccessFromForm(formData: FormData) {
   const crmIds = formData.getAll("crmAccess").map(String);
   return crmIds.map((crmId) => {
-    const profile = String(formData.get(`category-${crmId}`) ?? "COMMERCIAL");
+    const profile = String(formData.get(`category-${crmId}`) ?? "OUVRIER");
     return {
       crmId,
       role: String(formData.get(`role-${crmId}`) ?? "USER"),

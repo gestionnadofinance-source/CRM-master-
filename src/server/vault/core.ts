@@ -14,13 +14,14 @@ import { prisma } from "@/lib/prisma";
 import type { AuthContext } from "@/server/auth/session";
 import { requireCrmAccess, canManageOperations, assertBelongsToCrm } from "@/server/tenant";
 import { revalidatePath } from "next/cache";
+import { CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 export interface ActionResult {
   ok: boolean;
   error?: string;
 }
 
-const folderNameSchema = z.string().trim().min(1, "Le nom du dossier est requis.").max(150);
+const folderNameSchema = z.string().trim().min(1, "Le nom du dossier est requis.").max(150).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE);
 
 /**
  * Créer un dossier est permis à un administrateur/secrétaire pour

@@ -16,22 +16,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<CrmRole, Permission[]> = {
     Permission.EDIT,
     Permission.DELETE,
     Permission.EXPORT,
-    Permission.MANAGE_APPOINTMENTS,
-    Permission.MANAGE_QUOTES,
-    Permission.MANAGE_PROSPECTS,
-    Permission.MANAGE_CLIENTS,
     Permission.MANAGE_SETTINGS,
     Permission.MANAGE_USERS,
   ],
-  USER: [
-    Permission.VIEW,
-    Permission.CREATE,
-    Permission.EDIT,
-    Permission.MANAGE_APPOINTMENTS,
-    Permission.MANAGE_QUOTES,
-    Permission.MANAGE_PROSPECTS,
-    Permission.MANAGE_CLIENTS,
-  ],
+  USER: [Permission.VIEW, Permission.CREATE, Permission.EDIT],
 };
 
 export interface AccessLike {
@@ -46,15 +34,12 @@ export interface AccessLike {
  * du rôle, il ne fait qu'en ajouter (ex : un USER auquel on donne EXPORT).
  * Pour retirer un droit, il faut changer le rôle.
  *
- * Un accès de catégorie OUVRIER ou SECRETAIRE n'hérite d'AUCUNE permission
- * commerciale par défaut (clients, prospects, devis, rendez-vous...), quel
- * que soit son rôle MANAGER/USER. OUVRIER n'a accès qu'à Planning et au
- * Coffre-fort ; SECRETAIRE a en plus accès à Tableau de bord, Utilisateurs,
- * Pointage salariés/client et Activité — via des contrôles de catégorie
- * dédiés (voir canManageOperations dans src/server/tenant.ts), jamais via
- * une Permission commerciale. Ce choix protège automatiquement TOUTES les
- * routes commerciales existantes sans avoir à les modifier une par une :
- * elles exigent déjà une Permission précise via requireCrmAccess.
+ * Un accès de catégorie OUVRIER n'hérite d'AUCUNE permission par défaut,
+ * quel que soit son rôle : il n'atteint Planning, Coffre-fort et Pointage
+ * que par des contrôles de catégorie dédiés (voir canManageOperations et
+ * requireOperationsCategory dans src/server/tenant.ts). SECRETAIRE passe
+ * par le même mécanisme pour l'exploitation transverse, mais ne reçoit
+ * jamais MANAGE_SETTINGS, qui ouvrirait les Paramètres.
  */
 export function effectivePermissions(access: AccessLike): Set<Permission> {
   const roleDefaults =

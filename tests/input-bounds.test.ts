@@ -1,22 +1,26 @@
 /**
- * Bornes de longueur des champs texte (BUG-003).
+ * Bornes des champs de saisie (BUG-003, NEW-001, NEW-002).
  *
- * Les schémas zod des server actions n'avaient pas de borne haute : un
- * appelant — notamment via l'API publique d'écriture, qui accepte du JSON
- * arbitraire — pouvait stocker des mégaoctets par requête. Les bornes
- * vivent dans src/lib/validation.ts et sont volontairement larges pour ne
- * rendre aucune fiche existante non modifiable.
+ * Trois règles partagées vivent dans src/lib/validation.ts et s'appliquent
+ * à toutes les server actions :
+ *   - une borne haute de longueur, pour qu'un appelant ne puisse pas
+ *     stocker des mégaoctets par requête ;
+ *   - le rejet des caractères de contrôle, que PostgreSQL refuse dans une
+ *     colonne text (SQLSTATE 22021) et qui échouaient donc en base plutôt
+ *     qu'à la validation ;
+ *   - des bornes numériques calées sur la précision des colonnes Decimal.
  *
- * Intégration contre le vrai Postgres local, comme tests/vault.test.ts.
+ * Vérifié ici de bout en bout sur createChantier — la création métier
+ * centrale de l'ERP — contre le vrai Postgres local, comme
+ * tests/vault.test.ts.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Crm, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AccessCategory, CrmRole } from "@/server/permissions";
 import type { AuthContext, SessionUser } from "@/server/auth/session";
-import { createClient } from "@/server/clients/actions";
-import { saveQuote } from "@/server/quotes/actions";
-import { CONTROL_CHARS_MESSAGE, MAX_DECIMAL_10_2, MAX_LONG, MAX_SHORT } from "@/lib/validation";
+import { createChantier } from "@/server/planning/actions";
+import { CONTROL_CHARS_MESSAGE } from "@/lib/validation";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -45,11 +49,9 @@ async function wipeFixtures(): Promise<void> {
   await prisma.user.deleteMany({ where: { email: EMAIL } });
 }
 
-describe("bornes de longueur des champs texte", () => {
+describe("bornes des champs de saisie", () => {
   let crm: Crm;
   let owner: User;
-  let vatRateId: string;
-  let clientId: string;
 
   beforeAll(async () => {
     await wipeFixtures();
@@ -58,95 +60,72 @@ describe("bornes de longueur des champs texte", () => {
       data: { firstName: "__TEST__", lastName: "Bounds", email: EMAIL, passwordHash: "x", color: "#555555" },
     });
     await prisma.userCrmAccess.create({
-      data: { userId: owner.id, crmId: crm.id, role: CrmRole.MANAGER, category: AccessCategory.COMMERCIAL },
+      data: { userId: owner.id, crmId: crm.id, role: CrmRole.MANAGER, category: AccessCategory.SECRETAIRE },
     });
-    // Un devis a besoin d'un taux de TVA et d'une partie (client ou prospect)
-    // du même CRM : le contrôle des totaux vient après leur résolution.
-    vatRateId = (await prisma.vatRate.create({ data: { crmId: crm.id, label: "__TEST__ 20%", rate: 20 } })).id;
-    clientId = (await prisma.client.create({ data: { crmId: crm.id, company: "__TEST__ Destinataire", ownerId: owner.id } })).id;
   });
 
   afterAll(wipeFixtures);
 
   function create(fields: Record<string, string>) {
     const fd = new FormData();
-    fd.set("company", "__TEST__ Bornes");
-    fd.set("ownerId", owner.id);
+    fd.set("name", "__TEST__ Chantier");
+    fd.set("startDate", "2026-09-01");
+    fd.set("endDate", "2026-10-31");
     for (const [k, v] of Object.entries(fields)) fd.set(k, v);
-    return createClient(crm.id, fd, toCtx(owner));
+    return createChantier(crm.id, fd, toCtx(owner));
   }
 
-  it("refuse un nom d'entreprise au-delà de la borne, avec un message en français", async () => {
-    const res = await create({ company: "x".repeat(MAX_SHORT + 1) });
-    expect(res.ok).toBe(false);
-    expect(res.error).toBe(`Ce champ ne peut pas dépasser ${MAX_SHORT} caractères.`);
-  });
-
-  it("refuse des notes au-delà de la borne", async () => {
-    const res = await create({ notes: "x".repeat(MAX_LONG + 1) });
-    expect(res.ok).toBe(false);
-    expect(res.error).toBe(`Ce champ ne peut pas dépasser ${MAX_LONG} caractères.`);
-  });
-
-  it("accepte une saisie réaliste, y compris des notes très longues", async () => {
-    // ~19 000 caractères : bien au-delà de toute fiche réelle, mais sous la
-    // borne — c'est la marge qui garantit qu'aucune donnée déjà enregistrée
-    // ne devient non modifiable.
-    const res = await create({ company: "x".repeat(MAX_SHORT), notes: "note. ".repeat(3_000) });
+  it("accepte une saisie normale", async () => {
+    const res = await create({ name: "__TEST__ Chantier Nord", address: "1 rue de la Paix" });
     expect(res.ok).toBe(true);
   });
 
-  it("borne aussi la mise à jour, pas seulement la création", async () => {
-    const created = await create({ company: "__TEST__ À modifier" });
-    expect(created.ok).toBe(true);
-
-    const { updateClient } = await import("@/server/clients/actions");
-    const fd = new FormData();
-    fd.set("company", "y".repeat(MAX_SHORT + 1));
-    fd.set("ownerId", owner.id);
-    const res = await updateClient(crm.id, created.clientId!, fd, toCtx(owner));
+  // --- Longueur -----------------------------------------------------------
+  it("refuse un nom de chantier au-delà de la borne", async () => {
+    const res = await create({ name: "x".repeat(201) });
     expect(res.ok).toBe(false);
   });
-  // --- NEW-001 : caractères de contrôle -----------------------------------
-  it("refuse un octet nul dans un champ texte, au lieu de le laisser échouer en base", async () => {
-    const res = await create({ company: "Entreprise\u0000injectée" });
+
+  it("refuse une description au-delà de la borne", async () => {
+    const res = await create({ description: "x".repeat(2001) });
+    expect(res.ok).toBe(false);
+  });
+
+  it("accepte une description longue mais sous la borne", async () => {
+    const res = await create({ name: "__TEST__ Description longue", description: "détail. ".repeat(200) });
+    expect(res.ok).toBe(true);
+  });
+
+  // --- Caractères de contrôle (NEW-001) -----------------------------------
+  it("refuse un octet nul, au lieu de le laisser échouer en base", async () => {
+    const res = await create({ name: "__TEST__ Chantier\u0000injecté" });
     expect(res.ok).toBe(false);
     expect(res.error).toBe(CONTROL_CHARS_MESSAGE);
   });
 
   it("refuse aussi les autres caractères de contrôle", async () => {
     for (const ch of ["\u0001", "\u0007", "\u001F"]) {
-      const res = await create({ company: `Entreprise${ch}x` });
+      const res = await create({ name: `__TEST__ Chantier${ch}x` });
       expect(res.ok, JSON.stringify(ch)).toBe(false);
     }
   });
 
-  it("laisse passer sauts de ligne, retours chariot et tabulations dans un champ multiligne", async () => {
-    const res = await create({ company: "__TEST__ Multiligne", notes: "ligne 1\nligne 2\r\n\tindentée" });
+  it("laisse passer sauts de ligne et tabulations dans un champ multiligne", async () => {
+    const res = await create({
+      name: "__TEST__ Chantier multiligne",
+      importantDocuments: "document 1\nsuite\r\n\tindenté",
+    });
     expect(res.ok).toBe(true);
   });
 
-  // --- NEW-002 : bornes numériques ----------------------------------------
-  it("refuse une quantité de ligne au-delà de la capacité de la colonne", async () => {
-    const res = await saveQuote(crm.id, null, {
-      clientId, prospectId: null, object: "__TEST__ Devis hors bornes",
-      issueDate: "2026-09-23", validUntil: "2026-10-23",
-      items: [{ designation: "L", quantity: 1e9, unitPriceHt: 100, vatRateId: vatRateId }],
-    }, toCtx(owner));
+  // --- Bornes numériques (NEW-002) ----------------------------------------
+  it("refuse une prime au-delà de la capacité de la colonne", async () => {
+    const res = await create({ name: "__TEST__ Prime hors bornes", lunchAllowance: "1000000" });
     expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/dépasse le maximum autorisé/);
   });
 
-  it("refuse un devis dont le TOTAL déborde, même avec des lignes valides une à une", async () => {
-    // Chaque ligne tient dans sa colonne ; leur somme, elle, dépasse le
-    // Decimal(12, 2) des totaux — c'est le cas que borner les lignes seules
-    // ne couvre pas.
-    const line = { designation: "L", quantity: MAX_DECIMAL_10_2, unitPriceHt: 1000, vatRateId: vatRateId };
-    const res = await saveQuote(crm.id, null, {
-      clientId, prospectId: null, object: "__TEST__ Devis total hors bornes",
-      issueDate: "2026-09-23", validUntil: "2026-10-23", items: [line],
-    }, toCtx(owner));
-    expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/total du devis dépasse/);
+  it("accepte une prime dans les bornes", async () => {
+    const res = await create({ name: "__TEST__ Prime normale", lunchAllowance: "12.50" });
+    expect(res.ok).toBe(true);
   });
 });

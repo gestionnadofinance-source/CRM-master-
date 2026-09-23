@@ -4,7 +4,7 @@ import "server-only";
 // voir prisma/schema.prisma § API POUR INTÉGRATIONS EXTERNES et
 // src/server/admin/api-keys.ts (émission/révocation). Ces routes vivent
 // sous /api/public/ pour la même raison que la route cron (voir
-// src/app/api/public/cron/automations/route.ts) : src/proxy.ts exige
+// src/app/api/public/cron/purge/route.ts) : src/proxy.ts exige
 // un cookie de session sur toute route hors /api/public, et un client
 // externe (Obsidian, un script...) n'en a jamais.
 

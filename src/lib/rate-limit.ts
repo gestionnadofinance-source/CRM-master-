@@ -33,7 +33,7 @@ const RETENTION_DAYS = 7;
  * de limitation de fréquence utilisée dans l'application (au maximum 60
  * minutes), ces lignes n'ont plus d'utilité. Appelée depuis la route cron
  * déjà programmée quotidiennement (voir
- * src/app/api/public/cron/automations/route.ts).
+ * src/app/api/public/cron/purge/route.ts).
  */
 export async function purgeOldRateLimitHits(): Promise<number> {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);

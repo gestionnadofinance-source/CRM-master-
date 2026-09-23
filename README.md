@@ -1,31 +1,33 @@
 # CRM Master
 
-Plateforme interne unique pour une holding possédant plusieurs CRM
-indépendants. Une seule connexion, plusieurs espaces de travail
-strictement isolés, collaboration en temps réel.
+ERP interne pour une holding possédant plusieurs entités. Une seule
+connexion, plusieurs espaces de travail strictement isolés, collaboration
+en temps réel.
 
-CRM préconfigurés : **Fidem Froid Clim**, **Fidem Maintenance**,
+Fonctions centrales : **planning des chantiers**, **pointage salariés et
+client**, **coffre-fort de documents personnels**, **exports comptables
+Excel** et **ordres de mission**.
+
+Espaces préconfigurés : **Fidem Froid Clim**, **Fidem Maintenance**,
 **Fitness Park Modge**, **Association**, **Société de Communication** —
 renommables depuis l'administration, et un administrateur peut en ajouter
-d'autres sans écrire de code (voir [Architecture multi-CRM](#architecture-multi-crm)).
+d'autres sans écrire de code (voir [Architecture multi-espaces](#architecture-multi-espaces)).
 
 ## Sommaire
 
 - [Architecture](#architecture)
-- [Architecture multi-CRM](#architecture-multi-crm)
+- [Architecture multi-espaces](#architecture-multi-espaces)
 - [Installation](#installation)
 - [Variables d'environnement](#variables-denvironnement)
 - [Base de données et migrations](#base-de-données-et-migrations)
 - [Création du premier administrateur](#création-du-premier-administrateur)
 - [Authentification et sécurité](#authentification-et-sécurité)
 - [Rôles et permissions](#rôles-et-permissions)
-- [Isolation CRM — garanties et tests](#isolation-crm--garanties-et-tests)
+- [Isolation des espaces — garanties et tests](#isolation-des-espaces--garanties-et-tests)
 - [Temps réel](#temps-réel)
 - [Documents et stockage](#documents-et-stockage)
 - [Emails](#emails)
-- [Automatisations](#automatisations)
 - [API pour intégrations externes](#api-pour-intégrations-externes)
-- [Données de démonstration](#données-de-démonstration)
 - [Données personnelles (RGPD)](#données-personnelles-rgpd)
 - [Tests](#tests)
 - [Déploiement](#déploiement)
@@ -34,7 +36,7 @@ d'autres sans écrire de code (voir [Architecture multi-CRM](#architecture-multi
 
 ## Architecture
 
-- **Framework** : Next.js 15 (App Router) + TypeScript strict, React 19.
+- **Framework** : Next.js 16 (App Router) + TypeScript strict, React 19.
 - **Base de données** : PostgreSQL + Prisma ORM (schéma unique multi-tenant,
   `prisma/schema.prisma`).
 - **Authentification** : maison (bcrypt + sessions opaques stockées en base,
@@ -54,18 +56,17 @@ prisma/                  schéma, migrations, scripts de seed
 src/
   app/                   routes Next.js (App Router)
     (racine)             connexion, première connexion / changement de mot de passe
-    home/                accueil CRM Master (sélection de CRM)
+    home/                accueil (sélection d'espace)
     settings/            paramètres personnels
-    admin/                administration globale (utilisateurs, CRM, journal)
-    c/[crmSlug]/          espace d'un CRM (dashboard, pipeline, clients...)
-    book/[publicSlug]/    réservation publique (sans authentification)
-    api/                  routes API (PDF, documents, cron, auth Pusher)
+    admin/                administration globale (utilisateurs, espaces, journal)
+    c/[crmSlug]/          espace de travail (planning, pointage, coffre-fort...)
+    api/                  routes API (PDF, coffre-fort, API publique, auth Pusher)
   server/                logique métier serveur ("use server"), organisée par domaine
     auth/                connexion, sessions, mots de passe
-    tenant.ts            porte d'entrée unique de vérification d'accès CRM
+    tenant.ts            porte d'entrée unique de vérification d'accès
     permissions.ts        rôles et permissions
     activity.ts           journal d'activité
-    <domaine>/actions.ts  server actions par module (clients, quotes, ...)
+    <domaine>/actions.ts  server actions par module (planning, pointage, vault...)
   components/            composants UI réutilisables
   lib/                   utilitaires serveur/partagés (email, stockage, temps réel...)
 tests/                    tests automatisés (Vitest)
@@ -80,30 +81,22 @@ tests/                    tests automatisés (Vitest)
 > systématiquement revalidé côté serveur contre les droits réels de
 > l'utilisateur.
 
-## Architecture multi-CRM
+## Architecture multi-espaces
 
-Chaque CRM est un espace fonctionnellement indépendant (clients, prospects,
-pipeline, agenda, devis, tâches, messagerie, notifications, documents,
-statistiques, automatisations, journal d'activité — voir la liste complète
-dans `prisma/schema.prisma`).
+Chaque espace est fonctionnellement indépendant (chantiers, affectations,
+pointages, coffre-fort, documents, notifications, journal d'activité — voir
+la liste complète dans `prisma/schema.prisma`).
 
-**Ajouter un 6ᵉ CRM ne nécessite aucune modification de code.** Depuis
-`/admin/crms`, un administrateur global crée un CRM ; le serveur exécute
+**Ajouter un espace ne nécessite aucune modification de code.** Depuis
+`/admin/crms`, un administrateur global crée un espace ; le serveur exécute
 `provisionCrm()` (`src/server/admin/provision-crm.ts`) qui, dans une seule
-transaction, crée automatiquement :
+transaction, crée l'espace et les informations de l'entreprise
+(`CompanySettings`, qui alimentent notamment les mentions légales de
+l'ordre de mission).
 
-- les informations de l'entreprise (`CompanySettings`) ;
-- les paramètres de réservation publique (`BookingSettings`, avec un lien
-  public unique) ;
-- les 7 étapes de pipeline par défaut ;
-- les 10 sources par défaut ;
-- les 4 taux de TVA par défaut ;
-- le compteur de numérotation des devis.
-
-Le nouveau CRM bénéficie immédiatement de tous les modules (utilisateurs,
-permissions, clients, prospects, agenda, devis, documents, messagerie,
-notifications, statistiques, automatisations, journal d'activité) sans
-duplication manuelle.
+Le nouvel espace bénéficie immédiatement de tous les modules (utilisateurs,
+permissions, planning, pointage, coffre-fort, comptabilité, journal
+d'activité) sans duplication manuelle.
 
 ## Installation
 
@@ -115,7 +108,7 @@ cp .env.example .env
 # renseigner DATABASE_URL au minimum — voir la section suivante
 
 npx prisma migrate deploy   # applique les migrations existantes
-npm run seed                 # crée les 5 CRM + le premier administrateur
+npm run seed                 # crée les 5 espaces + le premier administrateur
 
 npm run dev                  # http://localhost:3000
 ```
@@ -132,7 +125,7 @@ Voir `.env.example` pour la liste complète et commentée. Résumé :
 | `SMTP_*` | non | Envoi réel des emails (bienvenue, feuilles de pointage). Sans configuration : emails journalisés côté serveur, l'application reste utilisable — les identifiants restent de toute façon gérés par un administrateur (voir Authentification et sécurité) |
 | `PUSHER_*` / `NEXT_PUBLIC_PUSHER_*` | non | Temps réel. Sans configuration : repli automatique par rafraîchissement |
 | `STORAGE_DRIVER`, `S3_*` | non (défaut `local`) | Stockage des documents. Utiliser `s3` en production sur un hébergeur sans disque persistant |
-| `CRON_SECRET` | non | Protège la route d'automatisations planifiées `POST /api/public/cron/automations` |
+| `CRON_SECRET` | recommandé | Protège la route de purge planifiée `/api/public/cron/purge` (rétention des données de connexion). Sans elle, la route répond 401 et la purge n'a jamais lieu |
 
 Toutes les variables sont validées au démarrage par `src/lib/env.ts`
 (échec explicite si une variable obligatoire est absente ou invalide —
@@ -152,10 +145,10 @@ npm run prisma:deploy     # production : applique les migrations existantes
 npm run prisma:studio     # explorateur de données
 ```
 
-Le schéma (`prisma/schema.prisma`) définit ~60 modèles. Toute table
-métier (clients, prospects, rendez-vous, tâches, devis, documents,
-messages, notifications, journal d'activité, configuration...) porte un
-`crmId` avec un index dédié. Les contraintes d'unicité composites
+Le schéma (`prisma/schema.prisma`) définit une cinquantaine de modèles.
+Toute table métier (chantiers, affectations, pointages, coffre-fort,
+notifications, journal d'activité, configuration...) porte un `crmId` avec
+un index dédié. Les contraintes d'unicité composites
 (ex. `Quote.number` unique par `crmId`, `Source.name` unique par `crmId`)
 empêchent les collisions entre CRM au niveau base de données, en
 complément — jamais en remplacement — du contrôle applicatif.
@@ -214,44 +207,40 @@ Des administrateurs supplémentaires se créent ensuite depuis
 ## Rôles et permissions
 
 - **Administrateur global** (`User.isGlobalAdmin`) : accès complet à
-  l'administration et à tous les CRM. L'espace `/admin` reprend, avec un
-  sélecteur de CRM en tête, les fonctions qui sinon obligeraient à entrer dans
-  chaque CRM l'un après l'autre : `/admin/planning`, `/admin/vault` et
-  `/admin/comptabilite`. Plusieurs administrateurs globaux
-  peuvent coexister.
-- **Responsable CRM** / **Utilisateur** (`UserCrmAccess.role`, par CRM —
-  un même utilisateur peut être responsable sur un CRM et simple
-  utilisateur sur un autre).
-- **Permissions détaillées** (`Permission` : `VIEW`, `CREATE`, `EDIT`,
-  `DELETE`, `EXPORT`, `MANAGE_APPOINTMENTS`, `MANAGE_QUOTES`,
-  `MANAGE_PROSPECTS`, `MANAGE_CLIENTS`, `MANAGE_SETTINGS`,
-  `MANAGE_USERS`) : chaque rôle a un jeu de permissions par défaut
-  (`src/server/permissions.ts`), et `UserCrmAccess.permissions` permet des
-  dérogations additives fines (ex. accorder `EXPORT` à un simple
-  utilisateur sans lui donner tout le rôle Responsable).
-- **Catégorie d'accès** (`UserCrmAccess.category` : `COMMERCIAL` ou
-  `OUVRIER`, indépendante du rôle) : un accès **Ouvrier** ne voit que les
-  onglets **Planning** (chantiers annuels et affectations, gérés par les
-  administrateurs/responsables) et **Coffre-fort** (documents personnels —
-  fiches de paie, etc. — déposés par un administrateur, strictement
-  isolés par utilisateur : personne d'autre, pas même un autre ouvrier,
-  ne peut voir ou télécharger les documents d'un tiers). Un accès
-  **Commercial** conserve tous les onglets existants, plus Planning et
-  Coffre-fort. Cette restriction est appliquée à la fois côté navigation
+  l'administration et à tous les espaces. L'espace `/admin` reprend, avec un
+  sélecteur en tête, les fonctions qui sinon obligeraient à entrer dans
+  chaque espace l'un après l'autre : `/admin/planning`, `/admin/vault` et
+  `/admin/comptabilite`. Plusieurs administrateurs globaux peuvent coexister.
+- **Responsable** / **Utilisateur** (`UserCrmAccess.role`, par espace).
+- **Catégorie d'accès** (`UserCrmAccess.category`) :
+  - **Ouvrier** — onglets **Planning** (chantiers annuels et affectations,
+    gérés par l'administration) et **Coffre-fort** (documents personnels —
+    fiches de paie, etc. — déposés par un administrateur, strictement isolés
+    par utilisateur : personne d'autre, pas même un autre ouvrier, ne peut
+    voir ou télécharger les documents d'un tiers).
+  - **Chef de chantier** — un Ouvrier affecté à au moins un chantier avec le
+    rôle `FOREMAN` (`ChantierAssignment.role`) ; il voit en plus les deux
+    onglets de **Pointage**.
+  - **Secrétaire** — accès transverse à l'exploitation : Planning, Pointage,
+    Coffre-fort, Comptabilité, Utilisateurs et Activité. Jamais les
+    Paramètres, qui exigent `MANAGE_SETTINGS`.
+
+  Cette restriction est appliquée à la fois côté navigation
   (`src/lib/nav.ts`) et côté serveur — un accès direct par URL à une page
-  commerciale est redirigé (`src/app/c/[crmSlug]/layout.tsx`), et un
-  accès `OUVRIER` n'hérite par défaut d'aucune permission commerciale
-  (`effectivePermissions`, `src/server/permissions.ts`), ce qui protège
-  automatiquement toutes les routes commerciales existantes sans avoir à
-  les modifier une par une.
+  non autorisée est redirigé (`src/app/c/[crmSlug]/layout.tsx`), et chaque
+  page refait le contrôle pour couvrir les navigations côté client.
+- **Permissions détaillées** (`Permission`) : chaque rôle a un jeu de
+  permissions par défaut (`src/server/permissions.ts`), et
+  `UserCrmAccess.permissions` permet des dérogations additives fines. Les
+  catégories `OUVRIER` et `SECRETAIRE` n'héritent d'aucune permission de
+  rôle : leur accès passe uniquement par des contrôles de catégorie
+  (`canManageOperations`, `requireOperationsCategory`).
 
-Un utilisateur peut avoir accès à plusieurs CRM et change d'espace sans
-se reconnecter via le sélecteur de CRM (barre supérieure) : toutes les
-données affichées (clients, prospects, agenda, devis, messagerie, tâches,
-notifications, statistiques) changent intégralement, sans résidu du CRM
-précédent.
+Un utilisateur peut avoir accès à plusieurs espaces et en change sans se
+reconnecter via le sélecteur (barre supérieure) : toutes les données
+affichées changent intégralement, sans résidu de l'espace précédent.
 
-## Isolation CRM — garanties et tests
+## Isolation des espaces — garanties et tests
 
 Trois niveaux de protection, jamais un seul :
 
@@ -338,32 +327,10 @@ uniquement à l'email de bienvenue optionnel et aux feuilles de pointage
 envoyées par un chef de chantier. Sans configuration, ces emails sont
 journalisés côté serveur au lieu d'échouer silencieusement.
 
-## Automatisations
-
-Moteur de règles par CRM (`src/server/automations/engine.ts`) :
-déclencheurs (devis envoyé, rendez-vous terminé, prospect converti,
-client créé, absence d'activité) → création de tâche de suivi, avec délai
-configurable. Configurable depuis `/c/[crmSlug]/settings`.
-
-La détection « absence d'activité depuis X jours » repose sur un
-déclenchement périodique (aucun exécuteur de tâches planifiées n'est
-disponible dans une application Next.js standard), assuré en production
-par une entrée Vercel Cron (`vercel.json`, quotidienne à 6h UTC) :
-
-- endpoint : `/api/public/cron/automations`, protégé par
-  `Authorization: Bearer $CRON_SECRET` (GET, format ajouté
-  automatiquement par Vercel Cron dès que la variable d'environnement
-  `CRON_SECRET` existe sur le projet) ou par l'en-tête `x-cron-secret`
-  (POST, déclenchement manuel) — 401 si le secret est absent ou
-  incorrect ;
-- la même exécution purge aussi les tentatives de connexion et les
-  compteurs de limitation de fréquence devenus obsolètes (voir
-  [Données personnelles (RGPD)](#données-personnelles-rgpd)).
-
 ## API pour intégrations externes
 
 Pour brancher un outil externe (ex. Obsidian) sur les données de tous les
-CRM via une clé API, sous `/api/public/v1` :
+espaces via une clé API, sous `/api/public/v1` :
 
 - **Émission des clés** : `/admin/api-keys` (réservé aux administrateurs
   globaux). La valeur en clair n'est affichée qu'une seule fois, à la
@@ -377,90 +344,46 @@ CRM via une clé API, sous `/api/public/v1` :
   - `READ_ONLY` : seules les routes `GET` sont accessibles ;
   - `READ_WRITE` : `GET` + `POST`/`PATCH`/`DELETE`. Réponse `403` si une
     clé `READ_ONLY` appelle une route d'écriture.
-- **Portée** : toutes les données de tous les CRM, équivalent à un
+- **Portée** : toutes les données de tous les espaces, équivalent à un
   administrateur global. Les routes d'écriture réutilisent tel quel le
   cœur métier des server actions de l'application (mêmes validations,
-  mêmes effets de bord : notifications, journal d'activité, mouvements de
-  pipeline, numérotation des devis...) — voir le paramètre optionnel
-  `actorCtx` de `createClient`, `saveQuote`, etc. et
-  `src/server/public-api/auth.ts` (`requireWriteAccess`).
+  mêmes effets de bord : notifications, journal d'activité...) — voir le
+  paramètre optionnel `actorCtx` de `createChantier`, `savePointage`, etc.
+  et `src/server/public-api/auth.ts` (`requireWriteAccess`).
 - **Pagination** (routes de liste) : paramètres `page` et `perPage`
   (défaut 100, plafonné à 500) ; réponse `{ data, page, perPage, total }`.
 - **Endpoints en lecture** (`GET /api/public/v1/...`) :
-  - `crms` — liste des CRM actifs
-  - `clients`, `prospects` — fiches commerciales
-  - `quotes` — devis
-  - `tasks` — tâches
-  - `appointments` — rendez-vous d'agenda
+  - `crms` — liste des espaces actifs
   - `chantiers` — chantiers et affectations (planning)
   - `pointages` — feuilles de pointage (heures saisies, hors taux/primes
     en euros)
-  - `crms/:id/members` — utilisateurs ayant accès à ce CRM (`id`, `name`,
-    `category`), pour retrouver l'`ownerId`/`assigneeId` à passer aux
-    endpoints d'écriture (aucune fiche client/tâche n'expose cet id
-    directement, seulement un `ownerName` d'affichage)
-  - `crms/:id/vat-rates` — taux de TVA du CRM (`id`, `label`, `rate`,
-    `isDefault`), pour le `vatRateId` de chaque ligne d'un devis créé via
-    `POST /quotes`
+  - `crms/:id/members` — utilisateurs ayant accès à cet espace (`id`,
+    `name`, `category`), pour retrouver l'identifiant à passer aux
+    endpoints d'écriture
 - **Endpoints en écriture** (clé `READ_WRITE` requise) :
-  - `POST /clients`, `/prospects`, `/tasks`, `/appointments`, `/chantiers`
-    — création (corps JSON avec les champs du formulaire correspondant +
-    `crmId` obligatoire) ;
-  - `PATCH /clients/:id`, `/prospects/:id`, `/chantiers/:id` — mise à jour
-    complète (mêmes champs que la création) ;
-  - `PATCH /tasks/:id`, `/appointments/:id` — mise à jour complète, ou
-    `{ crmId, status }` seul pour ne changer que le statut (ex. terminer
-    une tâche) ;
-  - `DELETE /clients/:id?crmId=...`, `/prospects/:id?crmId=...`,
-    `/tasks/:id?crmId=...`, `/appointments/:id?crmId=...`,
-    `/chantiers/:id?crmId=...` — suppression (`crmId` en paramètre de
-    requête) ;
-  - `POST /quotes` (création, brouillon) et `PATCH /quotes/:id` (édition
-    tant que le devis est modifiable) — corps JSON `{ crmId, clientId ou
-    prospectId, object, issueDate, validUntil, items: [...], ... }`, voir
-    `saveQuote` ; `DELETE /quotes/:id?crmId=...` (brouillons uniquement) ;
-    `POST /quotes/:id/status` avec `{ crmId, status }` pour les
-    transitions (`FOLLOWED_UP`/`ACCEPTED`/`REFUSED`/`EXPIRED` — l'envoi,
-    qui génère un PDF et un email, n'est pas exposé ici) ;
+  - `POST /chantiers` — création (corps JSON avec les champs du formulaire
+    + `crmId` obligatoire) ;
+  - `PATCH /chantiers/:id` — mise à jour complète ;
+  - `DELETE /chantiers/:id?crmId=...` — suppression ;
   - `POST /pointages` — création ou mise à jour (upsert par salarié +
     semaine, comme côté application) d'une fiche de pointage ; `DELETE
     /pointages/:id?crmId=...`.
 - **Réponses d'erreur** : `{ error }` avec `400` (validation), `403`
-  (permission insuffisante ou clé en lecture seule), `404` (CRM ou entité
-  introuvable) ou `409` (doublon détecté, ex. SIRET déjà utilisé — le
-  corps inclut alors `duplicate: { id, company }`).
+  (permission insuffisante ou clé en lecture seule), `404` (espace ou
+  entité introuvable) ou `409` (conflit).
 
 Exemples :
 
 ```bash
 # Lecture
 curl -H "Authorization: Bearer cmk_..." \
-  "https://crm-master-bice.vercel.app/api/public/v1/clients?page=1&perPage=100"
+  "https://crm-master-bice.vercel.app/api/public/v1/chantiers?page=1&perPage=100"
 
-# Créer une tâche (clé READ_WRITE)
+# Créer un chantier (clé READ_WRITE)
 curl -X POST -H "Authorization: Bearer cmk_..." -H "Content-Type: application/json" \
-  -d '{"crmId":"...","title":"Rappeler le client","assigneeId":"...","priority":"NORMAL","status":"TODO"}' \
-  "https://crm-master-bice.vercel.app/api/public/v1/tasks"
-
-# Terminer une tâche
-curl -X PATCH -H "Authorization: Bearer cmk_..." -H "Content-Type: application/json" \
-  -d '{"crmId":"...","status":"DONE"}' \
-  "https://crm-master-bice.vercel.app/api/public/v1/tasks/<id>"
+  -d '{"crmId":"...","name":"Chantier Nord","startDate":"2026-09-01","endDate":"2026-10-31"}' \
+  "https://crm-master-bice.vercel.app/api/public/v1/chantiers"
 ```
-
-## Données de démonstration
-
-```bash
-npm run seed:demo        # génère des données de démonstration pour les 5 CRM
-npm run seed:demo:clear  # les supprime intégralement
-```
-
-Toute donnée de démonstration est identifiable sans ambiguïté (préfixe
-`[DEMO] ` sur les entreprises/objets, domaine `@demo.crm-master.local`
-pour les comptes utilisateurs de démonstration, mot de passe
-`DemoPass123!`) et strictement séparable des données réelles — `seed:demo`
-est idempotent (ré-exécutable sans dupliquer), `seed:demo:clear` ne
-touche jamais les 5 CRM réels ni le compte administrateur.
 
 ## Données personnelles (RGPD)
 
@@ -477,13 +400,9 @@ cartographie en attendant.
 | --- | --- | --- |
 | `User` | `firstName`, `lastName`, `email`, `avatarUrl`, `signatureText`, `signatureImageUrl` | Compte interne (salarié) |
 | `Session` | `ipAddress`, `userAgent` | Purgée par cascade à la suppression du `User` |
-| `LoginAttempt` | `email`, `ipAddress` | Purge automatique après 90 jours (route cron, voir [Automatisations](#automatisations)) |
+| `LoginAttempt` | `email`, `ipAddress` | Purge automatique après 90 jours (route cron `/api/public/cron/purge`, déclenchée quotidiennement — voir `vercel.json`) |
 | `RateLimitHit` | `identifier` (adresse IP) | Purge automatique après 7 jours |
-| `Client`, `Prospect` | `firstName`, `lastName`, `phone`, `email`, `address`, `siret` | Personne physique de contact au sein d'une entreprise cliente/prospect |
-| `ClientContact`, `ProspectContact` | `firstName`, `lastName`, `phone`, `email` | Contacts additionnels |
-| `Appointment` | `bookingContactName`, `bookingContactEmail`, `bookingContactPhone`, `reportNotes` | Notamment via la réservation publique |
-| `Message` | `body` (texte libre) | Peut contenir des données personnelles selon le contenu échangé |
-| `Document`, `VaultDocument` | fichier lui-même | Le contenu du fichier peut porter des données personnelles (ex. fiche de paie) |
+| `VaultDocument` | fichier lui-même | Le contenu du fichier peut porter des données personnelles (ex. fiche de paie) |
 | `ActivityLog` | `oldValue`/`newValue` (JSON) | Peut contenir un instantané de champs personnels au moment de l'action |
 | `Pointage` | lié à `employeeId`/`foremanId` | Données de temps de travail d'un salarié |
 
@@ -532,10 +451,6 @@ suivent une procédure distincte, ci-dessous.
 3. Journaliser l'opération (qui, quand, pourquoi) en dehors de
    `ActivityLog` si celui-ci doit lui-même être couvert par la demande.
 
-**Amélioration prévue, non développée à ce stade** : les mêmes actions
-(export JSON, anonymisation) pour `Client`/`Prospect`, sur le même modèle
-que celles déjà disponibles pour `User`.
-
 ## Tests
 
 ```bash
@@ -548,13 +463,10 @@ npm run build     # build de production (échoue si erreurs de type/lint)
 La suite couvre notamment : hashage et validation des mots de passe,
 invariants de validité de session (y compris la révocation lors d'un
 changement de mot de passe par un administrateur), calcul des feuilles de
-pointage, permissions par défaut et dérogations par rôle, et — le plus
-important — l'isolation CRM de bout en bout (voir
-[ci-dessus](#isolation-crm--garanties-et-tests)).
-Chaque module métier a par ailleurs été validé manuellement de bout en
-bout contre un serveur réel (connexion, création d'entités, génération de
-PDF avec pagination, réservation publique, isolation cross-CRM sur les
-routes authentifiées et publiques).
+pointage, classement du coffre-fort par onglets, exports comptables,
+bornes de saisie, permissions par défaut et dérogations par rôle, et — le
+plus important — l'isolation des espaces de bout en bout (voir
+[ci-dessus](#isolation-des-espaces--garanties-et-tests)).
 
 ## Déploiement
 
@@ -567,8 +479,6 @@ Points d'attention spécifiques à un déploiement serverless (type Vercel) :
   n'est pas persistant sur Vercel).
 - **Temps réel** : configurer Pusher (`PUSHER_*`), une architecture
   WebSocket persistante n'étant pas disponible en serverless.
-- **Automatisations planifiées** : configurer un déclencheur cron externe
-  vers `/api/public/cron/automations` (voir [Automatisations](#automatisations)).
 - **Base de données** : PostgreSQL managé (Neon, Supabase, RDS...),
   `DATABASE_URL` pointant vers celui-ci ; exécuter `prisma migrate deploy`
   au déploiement (jamais `migrate dev` en production).
@@ -584,8 +494,8 @@ npm start                 # ou déploiement sur la plateforme cible
 
 ## Maintenance
 
-- **Ajouter un CRM** : `/admin/crms` → « Ajouter un CRM » (aucune
-  intervention technique nécessaire, voir [Architecture multi-CRM](#architecture-multi-crm)).
+- **Ajouter un espace** : `/admin/crms` → « Ajouter un CRM » (aucune
+  intervention technique nécessaire, voir [Architecture multi-espaces](#architecture-multi-espaces)).
 - **Désactiver un utilisateur** : `/admin/users` → conserve son
   historique ; ses sessions actives sont immédiatement révoquées.
 - **Purger l'historique d'un utilisateur** : fonction dédiée dans
@@ -596,48 +506,33 @@ npm start                 # ou déploiement sur la plateforme cible
   (`npx prisma migrate dev --name ...`) plutôt que modifier une migration
   existante ; ne jamais éditer `prisma/schema.prisma` sans migration
   correspondante.
-- **Journal d'activité** : consultable par CRM (`/c/[crmSlug]/activity`,
-  accessible à tout membre du CRM) et globalement
+- **Journal d'activité** : consultable par espace (`/c/[crmSlug]/activity`,
+  réservé à l'administration et à la secrétaire) et globalement
   (`/admin/activity`, réservé aux administrateurs globaux).
 
 ## État du projet et limites connues
 
 Application fonctionnelle de bout en bout (build de production propre,
 suite de tests automatisés passante, parcours complet validé manuellement :
-connexion, première connexion, création d'utilisateurs et
-d'accès CRM, clients/prospects/pipeline, agenda et réservation publique,
-devis avec génération PDF paginée, tâches, messagerie isolée par CRM,
-administration globale et par CRM). Points identifiés pour une suite de
-développement :
+connexion, première connexion, création d'utilisateurs et d'accès,
+planning des chantiers, pointage salariés et client, coffre-fort, exports
+comptables, ordres de mission, administration globale et par espace).
+Points identifiés pour une suite de développement :
 
-- L'édition d'un modèle de devis existant (`QuoteTemplate`) n'est pas
-  encore disponible depuis `/c/[crmSlug]/settings` (seules la création et
-  la suppression le sont).
-- La propagation temps réel du renommage d'un CRM s'appuie sur la
+- La propagation temps réel du renommage d'un espace s'appuie sur la
   revalidation Next.js (effective à la prochaine navigation) plutôt que
   sur un canal Pusher dédié — comportement volontaire, documenté dans le
   code (`src/server/admin/actions.ts`).
-- Les objectifs commerciaux (`CommercialObjective`) et les statistiques
-  de prévision commerciale avancées existent dans le schéma de données
-  mais n'ont pas d'interface dédiée.
-- L'export et l'anonymisation des données personnelles sont outillés pour
-  un `User` (salarié) depuis `/admin/users/[id]`, mais pas encore pour un
-  `Client`/`Prospect` — voir
-  [Données personnelles (RGPD)](#données-personnelles-rgpd) pour la
-  procédure manuelle en attendant sur ce second cas.
 - **Dépendances avec advisories de sécurité non corrigées** :
-  `npm audit` signale 6 vulnérabilités "high" sur `postcss`/`sharp`
-  (embarquées par `next`) et `deepmerge-ts` (embarqué par
-  `@prisma/config`, CLI Prisma uniquement). Aucun correctif non cassant
-  n'existe à ce jour (`npm audit fix` sans `--force` ne change rien) : la
-  seule résolution est une montée de version majeure de Next.js
-  (actuellement 15.5.23, la plus récente de la branche 15.x → 16.x).
-  Risque accepté pour l'instant — `sharp` n'est utilisé nulle part dans
-  `src/` (pas de pipeline `next/image` sur des images envoyées par un
-  utilisateur) et PostCSS ne traite que du CSS de build, donc
-  l'exploitabilité pratique est jugée faible dans l'usage actuel de
-  l'application. À revoir lors de la prochaine montée de version majeure
-  planifiée de Next.js.
+  `npm audit` signale 4 vulnérabilités "high" sur `deepmerge-ts` et
+  `mysql2`, toutes deux embarquées par `@prisma/config` — donc par la CLI
+  Prisma uniquement, jamais par le code applicatif (ce projet utilise
+  PostgreSQL, `mysql2` n'est chargé par aucun chemin d'exécution). Aucun
+  correctif non cassant n'existe à ce jour. Risque accepté : ces paquets
+  sont absents du build de production, ce qui a été vérifié dans la sortie
+  du build et dans le traçage de fichiers de Next.js.
+
+
 - **Preview et Production partagent actuellement la même base Neon**
   (vérifié directement en comparant l'hôte de connexion résolu par
   `DATABASE_URL` dans chaque environnement Vercel : identique dans les

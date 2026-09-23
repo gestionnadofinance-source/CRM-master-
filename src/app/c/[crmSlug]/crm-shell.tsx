@@ -6,7 +6,7 @@ import { CrmTopbar } from "@/components/crm-topbar";
 import { CrmSidebar } from "@/components/crm-sidebar";
 import type { CrmOption } from "@/components/crm-switcher";
 import type { SessionUser } from "@/server/auth/session";
-import type { Permission, AccessCategory } from "@prisma/client";
+import type {AccessCategory} from "@prisma/client";
 
 /**
  * Coquille de l'espace CRM (topbar + navigation + contenu), déclinée pour
@@ -19,7 +19,6 @@ export function CrmShell({
   current,
   options,
   crmSlug,
-  permissions,
   category,
   isGlobalAdmin,
   isForeman,
@@ -29,7 +28,6 @@ export function CrmShell({
   current: CrmOption;
   options: CrmOption[];
   crmSlug: string;
-  permissions: Permission[];
   category: AccessCategory;
   isGlobalAdmin: boolean;
   isForeman: boolean;
@@ -49,7 +47,6 @@ export function CrmShell({
   const sidebar = (
     <CrmSidebar
       crmSlug={crmSlug}
-      permissions={permissions}
       category={category}
       isGlobalAdmin={isGlobalAdmin}
       isForeman={isForeman}
@@ -64,8 +61,6 @@ export function CrmShell({
         current={current}
         options={options}
         onMenuClick={() => setNavOpen(true)}
-        category={category}
-        isGlobalAdmin={isGlobalAdmin}
       />
       <div className="flex min-h-0 flex-1">
         <div className="hidden w-56 shrink-0 overflow-y-auto border-r border-border bg-surface md:block">{sidebar}</div>

@@ -123,8 +123,9 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
         <div>
           <Label>Accès CRM</Label>
           <p className="mb-2 text-xs text-muted">
-            Cochez au moins un CRM, puis choisissez pour chacun la catégorie d&apos;accès (Commercial : accès
-            complet au CRM · Ouvrier : accès limité aux onglets Planning et Coffre-fort) et le rôle.
+            Cochez au moins un espace, puis choisissez pour chacun la catégorie d&apos;accès (Ouvrier : Planning
+            et Coffre-fort · Chef de chantier : en plus, les deux onglets de Pointage · Secrétaire : accès
+            transverse à l&apos;exploitation) et le rôle.
           </p>
           <div className="space-y-2">
             {crms.length === 0 && <p className="text-sm text-muted">Aucun CRM disponible.</p>}
@@ -159,7 +160,7 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
                           <Select
                             id={`category-${crm.id}`}
                             name={`category-${crm.id}`}
-                            defaultValue="COMMERCIAL"
+                            defaultValue="OUVRIER"
                             onChange={(e) =>
                               setCategoryByCrm((prev) => ({
                                 ...prev,
@@ -167,7 +168,6 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
                               }))
                             }
                           >
-                            <option value="COMMERCIAL">Commercial</option>
                             <option value="OUVRIER">Ouvrier</option>
                             <option value="OUVRIER_FOREMAN">Ouvrier — Chef de chantier</option>
                             <option value="SECRETAIRE">Secrétaire</option>
@@ -185,8 +185,9 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
                       </div>
                       {categoryByCrm[crm.id] === "SECRETAIRE" && (
                         <p className="rounded-md border border-dashed border-border p-2 text-xs text-muted">
-                          Accès total à l&apos;administration du CRM (Tableau de bord, Utilisateurs, Planning,
-                          Pointage, Coffre-fort, Activité), sans accès aux données commerciales.
+                          Accès transverse à l&apos;exploitation (Planning, Pointage, Coffre-fort,
+                          Comptabilité, Utilisateurs, Activité). Les Paramètres restent réservés à
+                          l&apos;administration.
                         </p>
                       )}
                       {(categoryByCrm[crm.id] === "OUVRIER" || categoryByCrm[crm.id] === "OUVRIER_FOREMAN") && (

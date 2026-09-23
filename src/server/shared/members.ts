@@ -7,7 +7,7 @@ export interface CrmMember {
   firstName: string;
   lastName: string;
   color: string;
-  /** COMMERCIAL pour un utilisateur commercial, OUVRIER pour un ouvrier/chef de chantier. Null pour un administrateur global (pas de catégorie propre, accès transverse). */
+  /** OUVRIER pour un ouvrier ou un chef de chantier, SECRETAIRE pour un accès transverse. Null pour un administrateur global (pas de catégorie propre). */
   category: AccessCategory | null;
   isGlobalAdmin: boolean;
 }

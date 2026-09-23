@@ -2,7 +2,7 @@
   "framework": "nextjs",
   "crons": [
     {
-      "path": "/api/public/cron/automations",
+      "path": "/api/public/cron/purge",
       "schedule": "0 6 * * *"
     }
   ]

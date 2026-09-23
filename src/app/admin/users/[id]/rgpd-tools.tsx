@@ -105,7 +105,7 @@ export function RgpdTools({
           <CardContent className="space-y-3">
             <p className="text-sm text-muted">
               Remplace le nom et l&apos;email de ce compte par des valeurs anonymes, de façon irréversible. Le
-              travail associé (devis, messages, tâches...) est conservé pour l&apos;intégrité des données du CRM,
+              travail associé (chantiers, pointages, documents...) est conservé pour l&apos;intégrité des données,
               mais n&apos;est plus rattaché à une personne identifiable.
             </p>
             {status !== "DISABLED" ? (

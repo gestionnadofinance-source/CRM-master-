@@ -14,9 +14,13 @@ export interface TenantContext {
   isGlobalAdmin: boolean;
 }
 
+// Un administrateur global n'a pas de ligne UserCrmAccess : on lui fabrique
+// un accès synthétique. SECRETAIRE est la catégorie la plus large depuis le
+// retrait du commercial ; de toute façon isGlobalAdmin court-circuite tous
+// les contrôles de catégorie.
 const GLOBAL_ADMIN_ACCESS: AccessSummary = {
   role: CrmRole.MANAGER,
-  category: AccessCategory.COMMERCIAL,
+  category: AccessCategory.SECRETAIRE,
   permissions: Object.values(Permission),
 };
 
@@ -118,7 +122,7 @@ export async function requireCrmAccessBySlug(
 export async function listAccessibleCrms(ctx: AuthContext) {
   if (ctx.user.isGlobalAdmin) {
     const crms = await prisma.crm.findMany({ where: { isActive: true }, orderBy: { order: "asc" } });
-    return crms.map((crm) => ({ ...crm, category: AccessCategory.COMMERCIAL as AccessCategory }));
+    return crms.map((crm) => ({ ...crm, category: AccessCategory.SECRETAIRE as AccessCategory }));
   }
   const access = await prisma.userCrmAccess.findMany({
     where: { userId: ctx.user.id, crm: { isActive: true } },
@@ -129,25 +133,17 @@ export async function listAccessibleCrms(ctx: AuthContext) {
 }
 
 /**
- * Bloque les pages réservées à la catégorie COMMERCIAL (tâches,
- * messagerie...). Le layout /c/[crmSlug] fait déjà ce contrôle, mais
- * Next.js ne réexécute pas un layout lors d'une navigation côté client vers
- * une autre page du même sous-arbre (clic sur un <Link>) : le layout seul
- * ne bloque donc que le premier accès (rechargement complet ou lien
- * externe), pas une navigation interne ultérieure. Chaque page réservée
- * doit donc refaire ce contrôle elle-même.
- *
- * `allowSecretaire` : certaines pages par ailleurs réservées à COMMERCIAL
- * (Tableau de bord, Activité) restent accessibles à la catégorie
- * SECRETAIRE — elle n'a de "total admin" que hors données commerciales,
- * voir prisma/schema.prisma (AccessCategory) et canManageOperations
- * ci-dessous. Par défaut SECRETAIRE est bloquée comme OUVRIER (ex. Tâches,
- * Messagerie).
+ * Bloque les pages d'exploitation transverse (Comptabilité, Activité,
+ * Utilisateurs) pour un ouvrier ou un chef de chantier. Le layout
+ * /c/[crmSlug] fait déjà ce contrôle, mais Next.js ne réexécute pas un
+ * layout lors d'une navigation côté client vers une autre page du même
+ * sous-arbre (clic sur un <Link>) : le layout seul ne bloque donc que le
+ * premier accès (rechargement complet ou lien externe), pas une navigation
+ * interne ultérieure. Chaque page réservée doit refaire ce contrôle.
  */
-export function requireCommercial(tenant: TenantContext, options: { allowSecretaire?: boolean } = {}): void {
+export function requireOperationsCategory(tenant: TenantContext): void {
   if (tenant.isGlobalAdmin) return;
-  const blocked = tenant.category === "OUVRIER" || (tenant.category === "SECRETAIRE" && !options.allowSecretaire);
-  if (blocked) {
+  if (tenant.category !== AccessCategory.SECRETAIRE) {
     redirect(`/c/${tenant.crmSlug}/planning`);
   }
 }
@@ -156,8 +152,7 @@ export function requireCommercial(tenant: TenantContext, options: { allowSecreta
  * Contrôle d'accès pour les fonctions d'"administration opérationnelle"
  * d'un CRM (Planning, Coffre-fort, Ordre de mission) — historiquement
  * gardées par la permission commerciale MANAGE_SETTINGS, mais celle-ci
- * ouvre aussi /c/[crmSlug]/settings (Pipeline, TVA, modèles de devis :
- * données commerciales). La catégorie SECRETAIRE ne doit JAMAIS recevoir
+ * ouvre aussi /c/[crmSlug]/settings. La catégorie SECRETAIRE ne doit JAMAIS recevoir
  * MANAGE_SETTINGS (elle atteindrait Settings via URL directe malgré la
  * navigation masquée — voir le correctif de sécurité "OUVRIER layout gate
  * bypassed via soft navigation"), donc ce contournement se fait par

@@ -104,9 +104,10 @@ export function EditAccessForm({
         <div>
           <Label>Accès CRM</Label>
           <p className="mb-2 text-xs text-muted">
-            Cochez au moins un CRM, puis choisissez pour chacun la catégorie d&apos;accès (Commercial : accès
-            complet au CRM · Ouvrier : accès limité aux onglets Planning et Coffre-fort) et le rôle. Les accès
-            révoqués ou modifiés prennent effet immédiatement.
+            Cochez au moins un espace, puis choisissez pour chacun la catégorie d&apos;accès (Ouvrier : Planning
+            et Coffre-fort · Chef de chantier : en plus, les deux onglets de Pointage · Secrétaire : accès
+            transverse à l&apos;exploitation) et le rôle. Les accès révoqués ou modifiés prennent effet
+            immédiatement.
           </p>
           <div className="space-y-2">
             {crms.map((crm) => {
@@ -140,7 +141,7 @@ export function EditAccessForm({
                           <Select
                             id={`category-${crm.id}`}
                             name={`category-${crm.id}`}
-                            defaultValue={categoryByCrm[crm.id] ?? "COMMERCIAL"}
+                            defaultValue={categoryByCrm[crm.id] ?? "OUVRIER"}
                             onChange={(e) =>
                               setCategoryByCrm((prev) => ({
                                 ...prev,
@@ -148,7 +149,6 @@ export function EditAccessForm({
                               }))
                             }
                           >
-                            <option value="COMMERCIAL">Commercial</option>
                             <option value="OUVRIER">Ouvrier</option>
                             <option value="OUVRIER_FOREMAN">Ouvrier — Chef de chantier</option>
                             <option value="SECRETAIRE">Secrétaire</option>
@@ -170,8 +170,9 @@ export function EditAccessForm({
                       </div>
                       {categoryByCrm[crm.id] === "SECRETAIRE" && (
                         <p className="rounded-md border border-dashed border-border p-2 text-xs text-muted">
-                          Accès total à l&apos;administration du CRM (Tableau de bord, Utilisateurs, Planning,
-                          Pointage, Coffre-fort, Activité), sans accès aux données commerciales.
+                          Accès transverse à l&apos;exploitation (Planning, Pointage, Coffre-fort,
+                          Comptabilité, Utilisateurs, Activité). Les Paramètres restent réservés à
+                          l&apos;administration.
                         </p>
                       )}
                       {(categoryByCrm[crm.id] === "OUVRIER" || categoryByCrm[crm.id] === "OUVRIER_FOREMAN") &&
