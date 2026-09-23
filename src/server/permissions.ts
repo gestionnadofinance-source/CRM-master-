@@ -3,25 +3,6 @@ import { Permission, CrmRole, AccessCategory } from "@prisma/client";
 
 export { Permission, CrmRole, AccessCategory };
 
-/**
- * Permissions accordées par défaut selon le rôle CRM, en l'absence de
- * dérogation explicite sur UserCrmAccess.permissions. Un administrateur
- * global (User.isGlobalAdmin) contourne ce système : il a toutes les
- * permissions sur tous les CRM.
- */
-export const ROLE_DEFAULT_PERMISSIONS: Record<CrmRole, Permission[]> = {
-  MANAGER: [
-    Permission.VIEW,
-    Permission.CREATE,
-    Permission.EDIT,
-    Permission.DELETE,
-    Permission.EXPORT,
-    Permission.MANAGE_SETTINGS,
-    Permission.MANAGE_USERS,
-  ],
-  USER: [Permission.VIEW, Permission.CREATE, Permission.EDIT],
-};
-
 export interface AccessLike {
   role: CrmRole;
   category: AccessCategory;
@@ -29,22 +10,28 @@ export interface AccessLike {
 }
 
 /**
- * Permissions effectives = union du défaut du rôle et des dérogations
- * explicites stockées sur l'accès. `permissions` ne retire jamais un droit
- * du rôle, il ne fait qu'en ajouter (ex : un USER auquel on donne EXPORT).
- * Pour retirer un droit, il faut changer le rôle.
+ * Permissions effectives d'un accès.
  *
- * Un accès de catégorie OUVRIER n'hérite d'AUCUNE permission par défaut,
- * quel que soit son rôle : il n'atteint Planning, Coffre-fort et Pointage
- * que par des contrôles de catégorie dédiés (voir canManageOperations et
- * requireOperationsCategory dans src/server/tenant.ts). SECRETAIRE passe
- * par le même mécanisme pour l'exploitation transverse, mais ne reçoit
- * jamais MANAGE_SETTINGS, qui ouvrirait les Paramètres.
+ * Depuis le retrait du volet commercial, il ne reste que deux catégories,
+ * OUVRIER et SECRETAIRE, et aucune des deux n'hérite de permission par
+ * défaut : leur accès passe par des contrôles de catégorie explicites
+ * (`canManageOperations`, `requireOperationsCategory` dans
+ * src/server/tenant.ts), jamais par une Permission. Les permissions ne
+ * proviennent donc plus que des dérogations posées à la main sur
+ * `UserCrmAccess.permissions`.
+ *
+ * Conséquence assumée : `UserCrmAccess.role` (Responsable / Utilisateur)
+ * n'accorde plus rien par lui-même. Le champ est conservé — il reste
+ * affiché et sert à distinguer les accès — mais le jeu de permissions par
+ * défaut par rôle qui existait ici n'avait plus aucun chemin d'exécution
+ * une fois la catégorie COMMERCIAL supprimée : le garder aurait laissé
+ * croire à une protection inexistante.
+ *
+ * Un administrateur global (`User.isGlobalAdmin`) ne passe pas par ici :
+ * il reçoit toutes les permissions, voir GLOBAL_ADMIN_ACCESS.
  */
 export function effectivePermissions(access: AccessLike): Set<Permission> {
-  const roleDefaults =
-    access.category === "OUVRIER" || access.category === "SECRETAIRE" ? [] : ROLE_DEFAULT_PERMISSIONS[access.role];
-  return new Set([...roleDefaults, ...access.permissions]);
+  return new Set(access.permissions);
 }
 
 export function hasPermission(access: AccessLike, permission: Permission): boolean {

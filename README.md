@@ -145,10 +145,9 @@ npm run prisma:deploy     # production : applique les migrations existantes
 npm run prisma:studio     # explorateur de données
 ```
 
-Le schéma (`prisma/schema.prisma`) définit une cinquantaine de modèles.
-Toute table métier (chantiers, affectations, pointages, coffre-fort,
-notifications, journal d'activité, configuration...) porte un `crmId` avec
-un index dédié. Les contraintes d'unicité composites
+Le schéma (`prisma/schema.prisma`) définit 16 modèles. Toute table métier
+(chantiers, affectations, pointages, coffre-fort, notifications, journal
+d'activité, configuration...) porte un `crmId` avec un index dédié. Les contraintes d'unicité composites
 (ex. `Quote.number` unique par `crmId`, `Source.name` unique par `crmId`)
 empêchent les collisions entre CRM au niveau base de données, en
 complément — jamais en remplacement — du contrôle applicatif.
@@ -229,12 +228,17 @@ Des administrateurs supplémentaires se créent ensuite depuis
   (`src/lib/nav.ts`) et côté serveur — un accès direct par URL à une page
   non autorisée est redirigé (`src/app/c/[crmSlug]/layout.tsx`), et chaque
   page refait le contrôle pour couvrir les navigations côté client.
-- **Permissions détaillées** (`Permission`) : chaque rôle a un jeu de
-  permissions par défaut (`src/server/permissions.ts`), et
-  `UserCrmAccess.permissions` permet des dérogations additives fines. Les
-  catégories `OUVRIER` et `SECRETAIRE` n'héritent d'aucune permission de
-  rôle : leur accès passe uniquement par des contrôles de catégorie
-  (`canManageOperations`, `requireOperationsCategory`).
+- **Permissions détaillées** (`Permission`) : aucune des deux catégories
+  n'hérite de permission par défaut — leur accès passe par des contrôles de
+  catégorie explicites (`canManageOperations`, `requireOperationsCategory`
+  dans `src/server/tenant.ts`), jamais par une `Permission`. Les seules
+  permissions accordées sont donc les dérogations posées à la main sur
+  `UserCrmAccess.permissions`.
+
+  **Conséquence à connaître** : `UserCrmAccess.role` (Responsable /
+  Utilisateur) n'accorde plus rien par lui-même depuis le retrait du volet
+  commercial. Le champ reste affiché et distingue les accès, mais ne
+  protège aucune route.
 
 Un utilisateur peut avoir accès à plusieurs espaces et en change sans se
 reconnecter via le sélecteur (barre supérieure) : toutes les données

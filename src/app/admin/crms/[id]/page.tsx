@@ -14,7 +14,7 @@ export default async function EditCrmPage({ params }: { params: Promise<{ id: st
 
   const crm = await prisma.crm.findUnique({
     where: { id },
-    include: { bookingSettings: true, _count: { select: { userAccess: true } } },
+    include: { _count: { select: { userAccess: true } } },
   });
   if (!crm) notFound();
 

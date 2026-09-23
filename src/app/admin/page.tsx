@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Users, UserPlus, CalendarDays, FileText, TrendingUp } from "lucide-react";
+import { Users, CalendarRange, ClipboardList, Lock, TrendingUp } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent, Badge } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { requireAuth } from "@/server/auth/session";
 import { getCrmDashboardRows } from "@/server/admin/queries";
 
@@ -46,17 +46,16 @@ export default async function AdminDashboardPage() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Stat icon={Users} label="Utilisateurs" value={crm.activeUsers} />
-                <Stat icon={UserPlus} label="Prospects" value={crm.prospects} />
-                <Stat icon={Users} label="Clients" value={crm.clients} />
-                <Stat icon={CalendarDays} label="RDV" value={crm.appointments} />
-                <Stat icon={FileText} label="Devis" value={crm.quotes} />
+                <Stat icon={CalendarRange} label="Chantiers" value={crm.chantiers} />
+                <Stat icon={ClipboardList} label="Pointages" value={crm.pointages} />
+                <Stat icon={Lock} label="Documents" value={crm.vaultDocuments} />
               </div>
               <div className="flex items-center gap-2 rounded-md bg-bg-subtle px-3 py-2 text-sm">
                 <TrendingUp className="h-4 w-4 text-brand" />
-                <span className="text-muted">CA devis acceptés :</span>
-                <span className="font-semibold text-text">{formatCurrency(crm.revenueAccepted)}</span>
+                <span className="text-muted">Chantiers en cours :</span>
+                <span className="font-semibold text-text">{crm.chantiersEnCours}</span>
               </div>
               <div>
                 <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">Activité récente</p>

@@ -46,7 +46,7 @@ interface ActionResultLike {
  * Traduit le résultat d'une server action réutilisée telle quelle (voir
  * requireWriteAccess) en réponse HTTP JSON : `{ ok: false, error }` → 400
  * (ou 409 en cas de doublon détecté), `{ ok: true, ... }` → `successStatus`
- * avec le reste des champs (ex. `clientId`).
+ * avec le reste des champs (ex. `chantierId`).
  */
 export function actionResultResponse<T extends ActionResultLike>(result: T, successStatus = 200): NextResponse {
   if (!result.ok) {

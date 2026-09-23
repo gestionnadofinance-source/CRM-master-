@@ -48,9 +48,9 @@ beforeAll(async () => {
   user = await prisma.user.create({
     data: { firstName: "__TEST__", lastName: "Guards", email: EMAIL, passwordHash: "x", color: "#111111" },
   });
-  // Simple utilisateur du CRM A : aucune permission MANAGE_SETTINGS, aucun accès au CRM B.
+  // Simple utilisateur de l'espace A : aucune permission MANAGE_SETTINGS, aucun accès à l'espace B.
   await prisma.userCrmAccess.create({
-    data: { userId: user.id, crmId: crmA.id, role: CrmRole.USER, category: AccessCategory.COMMERCIAL },
+    data: { userId: user.id, crmId: crmA.id, role: CrmRole.USER, category: AccessCategory.SECRETAIRE },
   });
   ctx = { sessionId: "s", user: user as unknown as SessionUser };
 });

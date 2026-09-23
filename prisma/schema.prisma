@@ -65,27 +65,9 @@ model User {
 
   crmAccess              UserCrmAccess[]
   sessions               Session[]
-  ownedClients           Client[]                   @relation("ClientOwner")
-  clientCollabs          ClientCollaborator[]
-  ownedProspects         Prospect[]                 @relation("ProspectOwner")
-  ownedOpportunities     Opportunity[]              @relation("OpportunityOwner")
-  ownedAppointments      Appointment[]              @relation("AppointmentOwner")
-  appointmentInvites     AppointmentParticipant[]
-  assignedTasks          Task[]                     @relation("TaskAssignee")
-  createdTasks           Task[]                     @relation("TaskCreatedBy")
-  availabilityRules      AvailabilityRule[]
-  availabilityExceptions AvailabilityException[]
-  createdQuotes          Quote[]                    @relation("QuoteCreatedBy")
-  quoteVersions          QuoteVersion[]
-  uploadedDocuments      Document[]
-  createdThreads         MessageThread[]
-  threadParticipants     MessageThreadParticipant[]
-  messages               Message[]
   notifications          Notification[]             @relation("NotificationRecipient")
   triggeredNotifications Notification[]             @relation("NotificationActor")
-  objectives             CommercialObjective[]
   activityLogs           ActivityLog[]
-  tags                   UserTag[]
   createdChantiers       Chantier[]                 @relation("ChantierCreatedBy")
   chantierAssignments    ChantierAssignment[]       @relation("ChantierAssignments")
   vaultDocuments         VaultDocument[]            @relation("VaultDocumentOwner")
@@ -161,31 +143,8 @@ model Crm {
   userAccess             UserCrmAccess[]
   companySettings        CompanySettings?
   pointageSettings       CrmPointageSettings?
-  bookingSettings        BookingSettings?
-  pipelineStages         PipelineStage[]
-  sources                Source[]
-  tags                   Tag[]
-  customFieldDefs        CustomFieldDefinition[]
-  vatRates               VatRate[]
-  quoteTemplates         QuoteTemplate[]
-  emailTemplates         EmailTemplate[]
-  automationRules        AutomationRule[]
-  clients                Client[]
-  prospects              Prospect[]
-  opportunities          Opportunity[]
-  appointments           Appointment[]
-  availabilityRules      AvailabilityRule[]
-  availabilityExceptions AvailabilityException[]
-  tasks                  Task[]
-  quotes                 Quote[]
-  quoteCounters          QuoteCounter[]
-  documents              Document[]
-  messageThreads         MessageThread[]
-  messages               Message[]
   notifications          Notification[]
   activityLogs           ActivityLog[]
-  objectives             CommercialObjective[]
-  customFieldValues      CustomFieldValue[]
   chantiers              Chantier[]
   vaultDocuments         VaultDocument[]
   vaultFolders           VaultFolder[]
@@ -205,10 +164,6 @@ enum Permission {
   EDIT
   DELETE
   EXPORT
-  MANAGE_APPOINTMENTS
-  MANAGE_QUOTES
-  MANAGE_PROSPECTS
-  MANAGE_CLIENTS
   MANAGE_SETTINGS
   MANAGE_USERS
 }
@@ -227,7 +182,6 @@ enum Permission {
 // Paramètres CRM (données commerciales), voir canManageOperations dans
 // src/server/tenant.ts.
 enum AccessCategory {
-  COMMERCIAL
   OUVRIER
   SECRETAIRE
 }
@@ -239,7 +193,7 @@ model UserCrmAccess {
   userId      String
   crmId       String
   role        CrmRole        @default(USER)
-  category    AccessCategory @default(COMMERCIAL)
+  category    AccessCategory @default(OUVRIER)
   permissions Permission[]
   grantedAt   DateTime       @default(now())
   grantedById String?
@@ -313,707 +267,43 @@ model CrmPointageSettings {
   updatedAt        DateTime @updatedAt
 }
 
-model BookingSettings {
-  id                   String   @id @default(cuid())
-  crmId                String   @unique
-  crm                  Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  publicSlug           String   @unique
-  isEnabled            Boolean  @default(true)
-  slotDurationMinutes  Int      @default(30)
-  bufferMinutes        Int      @default(0)
-  minNoticeHours       Int      @default(24)
-  maxAdvanceDays       Int      @default(60)
-  balancedDistribution Boolean  @default(false)
-  introMessage         String?
-  updatedAt            DateTime @updatedAt
-}
-
 // ============================================================================
 // CONFIGURATION PAR CRM : pipeline, sources, tags, champs personnalisés, TVA
 // ============================================================================
-
-model PipelineStage {
-  id        String   @id @default(cuid())
-  crmId     String
-  crm       Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  name      String
-  order     Int
-  color     String   @default("#94a3b8")
-  isWon     Boolean  @default(false)
-  isLost    Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  opportunities Opportunity[]
-
-  @@index([crmId])
-}
-
-model Source {
-  id    String @id @default(cuid())
-  crmId String
-  crm   Crm    @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  name  String
-  order Int    @default(0)
-
-  clients   Client[]
-  prospects Prospect[]
-
-  @@unique([crmId, name])
-}
-
-enum TagScope {
-  CLIENT
-  PROSPECT
-  USER
-}
-
-model Tag {
-  id    String   @id @default(cuid())
-  crmId String
-  crm   Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  scope TagScope
-  name  String
-  color String   @default("#94a3b8")
-
-  clientTags   ClientTag[]
-  prospectTags ProspectTag[]
-  userTags     UserTag[]
-
-  @@unique([crmId, scope, name])
-}
-
-enum CustomFieldEntity {
-  CLIENT
-  PROSPECT
-}
-
-enum CustomFieldType {
-  TEXT
-  NUMBER
-  DATE
-  SELECT
-  BOOLEAN
-}
-
-model CustomFieldDefinition {
-  id         String            @id @default(cuid())
-  crmId      String
-  crm        Crm               @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  entityType CustomFieldEntity
-  label      String
-  fieldType  CustomFieldType
-  options    String[]          @default([])
-  required   Boolean           @default(false)
-  order      Int               @default(0)
-
-  values CustomFieldValue[]
-
-  @@index([crmId, entityType])
-}
-
-model CustomFieldValue {
-  id           String                @id @default(cuid())
-  crmId        String
-  crm          Crm                   @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  definitionId String
-  definition   CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
-  entityType   CustomFieldEntity
-  entityId     String
-  value        String?
-
-  @@unique([definitionId, entityId])
-  @@index([crmId, entityType, entityId])
-}
-
-model VatRate {
-  id        String  @id @default(cuid())
-  crmId     String
-  crm       Crm     @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  label     String
-  rate      Decimal @db.Decimal(5, 2)
-  isDefault Boolean @default(false)
-
-  quoteItems QuoteItem[]
-
-  @@unique([crmId, label])
-}
 
 // ============================================================================
 // CLIENTS & PROSPECTS
 // ============================================================================
 
-enum ClientStatus {
-  ACTIVE
-  INACTIVE
-}
-
-model Client {
-  id              String       @id @default(cuid())
-  crmId           String
-  crm             Crm          @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  company         String
-  sector          String?
-  firstName       String?
-  lastName        String?
-  phone           String?
-  email           String?
-  address         String?
-  activity        String?
-  size            String?
-  siret           String?
-  status          ClientStatus @default(ACTIVE)
-  notes           String?
-  sourceId        String?
-  source          Source?      @relation(fields: [sourceId], references: [id])
-  ownerId         String
-  owner           User         @relation("ClientOwner", fields: [ownerId], references: [id])
-  commercialValue Decimal?     @db.Decimal(12, 2)
-  revenue         Decimal?     @db.Decimal(12, 2)
-  lastContactAt   DateTime?
-  nextContactAt   DateTime?
-  convertedFromId String?      @unique
-  convertedFrom   Prospect?    @relation("ProspectConversion", fields: [convertedFromId], references: [id])
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  contacts      ClientContact[]
-  collaborators ClientCollaborator[]
-  tags          ClientTag[]
-  opportunities Opportunity[]
-  appointments  Appointment[]
-  tasks         Task[]
-  quotes        Quote[]
-  documents     Document[]
-  activityLogs  ActivityLog[]
-
-  @@index([crmId, status])
-  @@index([crmId, ownerId])
-  @@index([crmId, siret])
-}
-
-model ClientContact {
-  id        String   @id @default(cuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  firstName String
-  lastName  String
-  role      String?
-  phone     String?
-  email     String?
-  createdAt DateTime @default(now())
-}
-
-model ClientCollaborator {
-  id       String @id @default(cuid())
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([clientId, userId])
-}
-
-model ClientTag {
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  tagId    String
-  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([clientId, tagId])
-}
-
-model UserTag {
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tagId  String
-  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([userId, tagId])
-}
-
-enum ProspectStatus {
-  HOT
-  COLD
-  TO_FOLLOW_UP
-  CONVERTED
-  LOST
-}
-
-model Prospect {
-  id              String         @id @default(cuid())
-  crmId           String
-  crm             Crm            @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  company         String
-  firstName       String?
-  lastName        String?
-  phone           String?
-  email           String?
-  address         String?
-  siret           String?
-  sector          String?
-  activity        String?
-  size            String?
-  sourceId        String?
-  source          Source?        @relation(fields: [sourceId], references: [id])
-  ownerId         String
-  owner           User           @relation("ProspectOwner", fields: [ownerId], references: [id])
-  status          ProspectStatus @default(TO_FOLLOW_UP)
-  score           Int            @default(0)
-  scoreBreakdown  Json?
-  potentialAmount Decimal?       @db.Decimal(12, 2)
-  notes           String?
-  lastContactAt   DateTime?
-  nextContactAt   DateTime?
-  lostReason      String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-
-  contacts      ProspectContact[]
-  tags          ProspectTag[]
-  opportunities Opportunity[]
-  appointments  Appointment[]
-  tasks         Task[]
-  quotes        Quote[]
-  documents     Document[]
-  activityLogs  ActivityLog[]
-  convertedTo   Client?           @relation("ProspectConversion")
-
-  @@index([crmId, status])
-  @@index([crmId, ownerId])
-  @@index([crmId, siret])
-}
-
-model ProspectContact {
-  id         String   @id @default(cuid())
-  prospectId String
-  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
-  firstName  String
-  lastName   String
-  role       String?
-  phone      String?
-  email      String?
-  createdAt  DateTime @default(now())
-}
-
-model ProspectTag {
-  prospectId String
-  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
-  tagId      String
-  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([prospectId, tagId])
-}
-
 // ============================================================================
 // PIPELINE COMMERCIAL
 // ============================================================================
-
-model Opportunity {
-  id             String        @id @default(cuid())
-  crmId          String
-  crm            Crm           @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  stageId        String
-  stage          PipelineStage @relation(fields: [stageId], references: [id])
-  clientId       String?
-  client         Client?       @relation(fields: [clientId], references: [id])
-  prospectId     String?
-  prospect       Prospect?     @relation(fields: [prospectId], references: [id])
-  title          String
-  amount         Decimal?      @db.Decimal(12, 2)
-  ownerId        String
-  owner          User          @relation("OpportunityOwner", fields: [ownerId], references: [id])
-  position       Int           @default(0)
-  nextAction     String?
-  lastActivityAt DateTime      @default(now())
-  wonAt          DateTime?
-  lostAt         DateTime?
-  lostReason     String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  history OpportunityHistory[]
-
-  @@index([crmId, stageId])
-}
-
-model OpportunityHistory {
-  id            String      @id @default(cuid())
-  opportunityId String
-  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  fromStageId   String?
-  toStageId     String
-  movedById     String
-  createdAt     DateTime    @default(now())
-}
 
 // ============================================================================
 // AGENDA & RÉSERVATION
 // ============================================================================
 
-enum AppointmentStatus {
-  SCHEDULED
-  COMPLETED
-  CANCELLED
-  NO_SHOW
-}
-
-model Appointment {
-  id                  String            @id @default(cuid())
-  crmId               String
-  crm                 Crm               @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  title               String
-  clientId            String?
-  client              Client?           @relation(fields: [clientId], references: [id])
-  prospectId          String?
-  prospect            Prospect?         @relation(fields: [prospectId], references: [id])
-  ownerId             String
-  owner               User              @relation("AppointmentOwner", fields: [ownerId], references: [id])
-  startAt             DateTime
-  endAt               DateTime
-  location            String?
-  phone               String?
-  email               String?
-  notes               String?
-  status              AppointmentStatus @default(SCHEDULED)
-  isPublicBooking     Boolean           @default(false)
-  bookingContactName  String?
-  bookingContactEmail String?
-  bookingContactPhone String?
-  bookingMessage      String?
-
-  reportSummary    String?
-  reportNeeds      String?
-  reportBudget     String?
-  reportNextStep   String?
-  reportFollowUpAt DateTime?
-  reportNotes      String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  participants AppointmentParticipant[]
-  tasks        Task[]
-  documents    Document[]
-  activityLogs ActivityLog[]
-
-  @@index([crmId, ownerId, startAt])
-  @@index([crmId, startAt])
-}
-
-model AppointmentParticipant {
-  id            String      @id @default(cuid())
-  appointmentId String
-  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([appointmentId, userId])
-}
-
-model AvailabilityRule {
-  id        String @id @default(cuid())
-  crmId     String
-  crm       Crm    @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weekday   Int // 0 = lundi ... 6 = dimanche
-  startTime String // "09:00"
-  endTime   String // "12:00"
-
-  @@index([crmId, userId, weekday])
-}
-
-enum AvailabilityExceptionType {
-  LEAVE
-  HOLIDAY
-  UNAVAILABLE
-  BLOCKED
-}
-
-model AvailabilityException {
-  id        String                    @id @default(cuid())
-  crmId     String
-  crm       Crm                       @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      AvailabilityExceptionType
-  startAt   DateTime
-  endAt     DateTime
-  allDay    Boolean                   @default(true)
-  reason    String?
-  createdAt DateTime                  @default(now())
-
-  @@index([crmId, userId, startAt])
-}
-
 // ============================================================================
 // TÂCHES
 // ============================================================================
-
-enum TaskPriority {
-  LOW
-  NORMAL
-  HIGH
-  URGENT
-}
-
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  DONE
-}
-
-model Task {
-  id            String       @id @default(cuid())
-  crmId         String
-  crm           Crm          @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  title         String
-  description   String?
-  assigneeId    String
-  assignee      User         @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  clientId      String?
-  client        Client?      @relation(fields: [clientId], references: [id])
-  prospectId    String?
-  prospect      Prospect?    @relation(fields: [prospectId], references: [id])
-  quoteId       String?
-  quote         Quote?       @relation(fields: [quoteId], references: [id])
-  appointmentId String?
-  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
-  priority      TaskPriority @default(NORMAL)
-  status        TaskStatus   @default(TODO)
-  dueAt         DateTime?
-  createdById   String
-  createdBy     User         @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  isAutomated   Boolean      @default(false)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  completedAt   DateTime?
-
-  @@index([crmId, assigneeId, status])
-  @@index([crmId, dueAt])
-}
 
 // ============================================================================
 // DEVIS
 // ============================================================================
 
-enum QuoteStatus {
-  DRAFT
-  SENT
-  FOLLOWED_UP
-  ACCEPTED
-  REFUSED
-  EXPIRED
-}
-
-model QuoteCounter {
-  id         String @id @default(cuid())
-  crmId      String
-  crm        Crm    @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  prefix     String
-  year       Int
-  lastNumber Int    @default(0)
-
-  @@unique([crmId, prefix, year])
-}
-
-model Quote {
-  id             String      @id @default(cuid())
-  crmId          String
-  crm            Crm         @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  number         String
-  clientId       String?
-  client         Client?     @relation(fields: [clientId], references: [id])
-  object         String
-  siretSnapshot  String?
-  issueDate      DateTime    @default(now())
-  validUntil     DateTime
-  status         QuoteStatus @default(DRAFT)
-  conditions     String?
-  mentions       String?
-  totalHt        Decimal     @default(0) @db.Decimal(12, 2)
-  totalVat       Decimal     @default(0) @db.Decimal(12, 2)
-  totalTtc       Decimal     @default(0) @db.Decimal(12, 2)
-  currentVersion Int         @default(1)
-  createdById    String
-  createdBy      User        @relation("QuoteCreatedBy", fields: [createdById], references: [id])
-  signedById     String?
-  sentAt         DateTime?
-  acceptedAt     DateTime?
-  refusedAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  items        QuoteItem[]
-  versions     QuoteVersion[]
-  tasks        Task[]
-  documents    Document[]
-  activityLogs ActivityLog[]
-  prospect     Prospect?      @relation(fields: [prospectId], references: [id])
-  prospectId   String?
-
-  @@unique([crmId, number])
-  @@index([crmId, status])
-  @@index([crmId, clientId])
-}
-
-model QuoteItem {
-  id          String  @id @default(cuid())
-  quoteId     String
-  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  designation String
-  quantity    Decimal @db.Decimal(10, 2)
-  unitPriceHt Decimal @db.Decimal(12, 2)
-  vatRateId   String
-  vatRate     VatRate @relation(fields: [vatRateId], references: [id])
-  order       Int     @default(0)
-}
-
-model QuoteVersion {
-  id            String   @id @default(cuid())
-  quoteId       String
-  quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  versionNumber Int
-  snapshot      Json
-  authorId      String
-  author        User     @relation(fields: [authorId], references: [id])
-  note          String?
-  createdAt     DateTime @default(now())
-
-  @@unique([quoteId, versionNumber])
-}
-
-model QuoteTemplate {
-  id           String   @id @default(cuid())
-  crmId        String
-  crm          Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  name         String
-  logoUrl      String?
-  primaryColor String   @default("#3b6bf5")
-  mentions     String?
-  conditions   String?
-  footer       String?
-  isDefault    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-
-  @@index([crmId])
-}
-
 // ============================================================================
 // DOCUMENTS
 // ============================================================================
 
-enum DocumentEntity {
-  CLIENT
-  PROSPECT
-  QUOTE
-  APPOINTMENT
-  MESSAGE
-}
-
-model Document {
-  id           String         @id @default(cuid())
-  crmId        String
-  crm          Crm            @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  fileName     String
-  mimeType     String
-  size         Int
-  storageKey   String
-  entityType   DocumentEntity
-  entityId     String
-  uploadedById String
-  uploadedBy   User           @relation(fields: [uploadedById], references: [id])
-  createdAt    DateTime       @default(now())
-
-  clientId      String?
-  client        Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  prospectId    String?
-  prospect      Prospect?    @relation(fields: [prospectId], references: [id], onDelete: Cascade)
-  quoteId       String?
-  quote         Quote?       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  appointmentId String?
-  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-
-  messageAttachments MessageAttachment[]
-
-  @@index([crmId, entityType, entityId])
-}
-
 // ============================================================================
 // MESSAGERIE INTERNE (isolée par CRM)
 // ============================================================================
-
-enum ThreadType {
-  DIRECT
-  GROUP
-}
-
-model MessageThread {
-  id          String     @id @default(cuid())
-  crmId       String
-  crm         Crm        @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  type        ThreadType
-  name        String?
-  createdById String
-  createdBy   User       @relation(fields: [createdById], references: [id])
-  createdAt   DateTime   @default(now())
-
-  participants MessageThreadParticipant[]
-  messages     Message[]
-
-  @@index([crmId])
-}
-
-model MessageThreadParticipant {
-  id         String        @id @default(cuid())
-  threadId   String
-  thread     MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lastReadAt DateTime?
-  joinedAt   DateTime      @default(now())
-
-  @@unique([threadId, userId])
-}
-
-model Message {
-  id        String        @id @default(cuid())
-  crmId     String
-  crm       Crm           @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  threadId  String
-  thread    MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User          @relation(fields: [authorId], references: [id])
-  body      String
-  createdAt DateTime      @default(now())
-  editedAt  DateTime?
-
-  attachments MessageAttachment[]
-
-  @@index([crmId, threadId, createdAt])
-}
-
-model MessageAttachment {
-  id         String   @id @default(cuid())
-  messageId  String
-  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-}
 
 // ============================================================================
 // NOTIFICATIONS
 // ============================================================================
 
 enum NotificationType {
-  PROSPECT_CREATED
-  CLIENT_UPDATED
-  APPOINTMENT_CREATED
-  APPOINTMENT_UPDATED
-  QUOTE_CREATED
-  QUOTE_UPDATED
-  TASK_CREATED
-  MESSAGE_RECEIVED
   DOCUMENT_ADDED
 }
 
@@ -1040,80 +330,9 @@ model Notification {
 // MODÈLES EMAIL & AUTOMATISATIONS
 // ============================================================================
 
-model EmailTemplate {
-  id        String   @id @default(cuid())
-  crmId     String
-  crm       Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  key       String
-  name      String
-  subject   String
-  body      String
-  updatedAt DateTime @updatedAt
-
-  @@unique([crmId, key])
-}
-
-enum AutomationTrigger {
-  QUOTE_SENT
-  APPOINTMENT_COMPLETED
-  PROSPECT_CONVERTED
-  CLIENT_CREATED
-  NO_ACTIVITY_SINCE
-}
-
-enum AutomationActionType {
-  CREATE_TASK
-}
-
-model AutomationRule {
-  id        String            @id @default(cuid())
-  crmId     String
-  crm       Crm               @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  name      String
-  trigger   AutomationTrigger
-  delayDays Int               @default(0)
-  isActive  Boolean           @default(true)
-  createdAt DateTime          @default(now())
-
-  actions AutomationAction[]
-
-  @@index([crmId, trigger])
-}
-
-model AutomationAction {
-  id     String               @id @default(cuid())
-  ruleId String
-  rule   AutomationRule       @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  type   AutomationActionType
-  config Json
-
-  @@index([ruleId])
-}
-
 // ============================================================================
 // OBJECTIFS COMMERCIAUX
 // ============================================================================
-
-enum ObjectivePeriod {
-  MONTHLY
-  QUARTERLY
-}
-
-model CommercialObjective {
-  id                 String          @id @default(cuid())
-  crmId              String
-  crm                Crm             @relation(fields: [crmId], references: [id], onDelete: Cascade)
-  userId             String
-  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  period             ObjectivePeriod
-  periodStart        DateTime
-  targetRevenue      Decimal?        @db.Decimal(12, 2)
-  targetAppointments Int?
-  targetQuotes       Int?
-  targetNewClients   Int?
-
-  @@unique([crmId, userId, period, periodStart])
-}
 
 // ============================================================================
 // JOURNAL D'ACTIVITÉ
@@ -1131,15 +350,6 @@ model ActivityLog {
   oldValue   Json?
   newValue   Json?
   createdAt  DateTime @default(now())
-
-  clientId      String?
-  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  prospectId    String?
-  prospect      Prospect?    @relation(fields: [prospectId], references: [id], onDelete: SetNull)
-  quoteId       String?
-  quote         Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
-  appointmentId String?
-  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([crmId, createdAt])
   @@index([crmId, entityType, entityId])

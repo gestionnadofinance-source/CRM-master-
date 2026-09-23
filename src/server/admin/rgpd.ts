@@ -41,7 +41,7 @@ export async function exportUserPersonalData(userId: string): Promise<ExportResu
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { ok: false, error: "Utilisateur introuvable." };
 
-  const [crmAccess, sessions, loginAttempts, messages, activityLog, pointagesAsEmployee] = await Promise.all([
+  const [crmAccess, sessions, loginAttempts, activityLog, pointagesAsEmployee] = await Promise.all([
     prisma.userCrmAccess.findMany({
       where: { userId },
       select: { crmId: true, role: true, category: true, isForeman: true, grantedAt: true },
@@ -56,11 +56,6 @@ export async function exportUserPersonalData(userId: string): Promise<ExportResu
       // prisma/schema.prisma — la personne n'y est identifiable qu'ainsi.
       where: { email: user.email },
       select: { ipAddress: true, success: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.message.findMany({
-      where: { authorId: userId },
-      select: { crmId: true, threadId: true, body: true, createdAt: true, editedAt: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.activityLog.findMany({
@@ -101,7 +96,6 @@ export async function exportUserPersonalData(userId: string): Promise<ExportResu
       crmAccess,
       sessions,
       loginAttempts,
-      messagesAuthored: messages,
       activityLog,
       pointagesAsEmployee,
     },
@@ -113,7 +107,7 @@ export async function exportUserPersonalData(userId: string): Promise<ExportResu
  * à l'effacement) : remplace firstName/lastName/email/avatar/signature par
  * des valeurs anonymes, sans supprimer la ligne elle-même — une
  * suppression physique casserait l'intégrité référentielle des devis,
- * messages et tâches que ce compte a créés (voir README § Données
+ * pointages et documents que ce compte a créés (voir README § Données
  * personnelles, qui documente cette même règle pour la procédure
  * manuelle). Exige que le compte soit déjà désactivé, pour ne jamais
  * anonymiser un salarié encore actif par erreur.

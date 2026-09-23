@@ -32,72 +32,37 @@ function toCtx(user: User): AuthContext {
   return { user: sessionUser, sessionId: "__test__-session" };
 }
 
-describe("effectivePermissions / hasPermission (role defaults + overrides)", () => {
-  it("USER has VIEW/CREATE/EDIT by default", () => {
-    const access = { role: CrmRole.USER, category: AccessCategory.COMMERCIAL, permissions: [] as Permission[] };
-    for (const p of [Permission.VIEW, Permission.CREATE, Permission.EDIT]) {
-      expect(hasPermission(access, p)).toBe(true);
-    }
-  });
+describe("effectivePermissions / hasPermission", () => {
+  // Depuis le retrait du volet commercial, aucune des deux catégories
+  // restantes n'hérite de permission par défaut : seules les dérogations
+  // explicites posées sur UserCrmAccess.permissions en accordent. C'est ce
+  // que ces tests fixent — y compris le fait qu'un rôle MANAGER n'ouvre
+  // rien à lui seul.
+  for (const category of [AccessCategory.OUVRIER, AccessCategory.SECRETAIRE]) {
+    it(`la catégorie ${category} n'a AUCUNE permission par défaut, même en rôle MANAGER`, () => {
+      const access = { role: CrmRole.MANAGER, category, permissions: [] as Permission[] };
+      for (const p of Object.values(Permission)) {
+        expect(hasPermission(access, p)).toBe(false);
+      }
+    });
 
-  it("USER does NOT have DELETE/EXPORT/MANAGE_SETTINGS/MANAGE_USERS by default", () => {
-    const access = { role: CrmRole.USER, category: AccessCategory.COMMERCIAL, permissions: [] as Permission[] };
-    for (const p of [Permission.DELETE, Permission.EXPORT, Permission.MANAGE_SETTINGS, Permission.MANAGE_USERS]) {
-      expect(hasPermission(access, p)).toBe(false);
-    }
-  });
+    it(`la catégorie ${category} honore une dérogation explicite, sans fuite vers les autres permissions`, () => {
+      const access = { role: CrmRole.USER, category, permissions: [Permission.EXPORT] };
+      const effective = effectivePermissions(access);
 
-  it("MANAGER adds DELETE/EXPORT/MANAGE_SETTINGS/MANAGE_USERS to the USER defaults", () => {
-    const access = { role: CrmRole.MANAGER, category: AccessCategory.COMMERCIAL, permissions: [] as Permission[] };
-    for (const p of [
-      Permission.VIEW,
-      Permission.CREATE,
-      Permission.EDIT,
-      Permission.DELETE,
-      Permission.EXPORT,
-      Permission.MANAGE_SETTINGS,
-      Permission.MANAGE_USERS,
-    ]) {
-      expect(hasPermission(access, p)).toBe(true);
-    }
-  });
+      expect(effective.has(Permission.EXPORT)).toBe(true);
+      expect(effective.has(Permission.VIEW)).toBe(false);
+      expect(effective.has(Permission.MANAGE_SETTINGS)).toBe(false);
+      expect(effective.has(Permission.MANAGE_USERS)).toBe(false);
+    });
+  }
 
-  it("an explicit additive override grants the extra permission without removing role defaults or leaking to unrelated ones", () => {
-    const access = { role: CrmRole.USER, category: AccessCategory.COMMERCIAL, permissions: [Permission.EXPORT] };
-    const effective = effectivePermissions(access);
+  it("le rôle n'accorde rien par lui-même : MANAGER et USER donnent le même résultat", () => {
+    const base = { category: AccessCategory.SECRETAIRE, permissions: [Permission.VIEW] };
+    const asManager = effectivePermissions({ ...base, role: CrmRole.MANAGER });
+    const asUser = effectivePermissions({ ...base, role: CrmRole.USER });
 
-    expect(effective.has(Permission.EXPORT)).toBe(true); // granted via override
-    expect(effective.has(Permission.VIEW)).toBe(true); // still has role defaults
-    expect(effective.has(Permission.DELETE)).toBe(false); // override doesn't leak to other permissions
-    expect(effective.has(Permission.MANAGE_SETTINGS)).toBe(false);
-  });
-
-  it("OUVRIER category has NO commercial permission by default, even as MANAGER role", () => {
-    const access = { role: CrmRole.MANAGER, category: AccessCategory.OUVRIER, permissions: [] as Permission[] };
-    for (const p of Object.values(Permission)) {
-      expect(hasPermission(access, p)).toBe(false);
-    }
-  });
-
-  it("OUVRIER category still honors an explicit additive override", () => {
-    const access = { role: CrmRole.USER, category: AccessCategory.OUVRIER, permissions: [Permission.VIEW] };
-    const effective = effectivePermissions(access);
-    expect(effective.has(Permission.VIEW)).toBe(true);
-    expect(effective.has(Permission.MANAGE_CLIENTS)).toBe(false);
-  });
-
-  it("SECRETAIRE category has NO commercial permission by default, even as MANAGER role (same defense-in-depth as OUVRIER)", () => {
-    const access = { role: CrmRole.MANAGER, category: AccessCategory.SECRETAIRE, permissions: [] as Permission[] };
-    for (const p of Object.values(Permission)) {
-      expect(hasPermission(access, p)).toBe(false);
-    }
-  });
-
-  it("SECRETAIRE category still honors an explicit additive override", () => {
-    const access = { role: CrmRole.USER, category: AccessCategory.SECRETAIRE, permissions: [Permission.VIEW] };
-    const effective = effectivePermissions(access);
-    expect(effective.has(Permission.VIEW)).toBe(true);
-    expect(effective.has(Permission.MANAGE_CLIENTS)).toBe(false);
+    expect([...asManager].sort()).toEqual([...asUser].sort());
   });
 });
 
@@ -108,7 +73,7 @@ describe("canManageOperations (SECRETAIRE bypass for Planning/Coffre-fort/Ordre 
       crmSlug: "crm1",
       crmName: "CRM 1",
       role: CrmRole.USER,
-      category: AccessCategory.COMMERCIAL,
+      category: AccessCategory.OUVRIER,
       permissions: new Set<Permission>(),
       isGlobalAdmin: false,
       ...overrides,
@@ -123,14 +88,10 @@ describe("canManageOperations (SECRETAIRE bypass for Planning/Coffre-fort/Ordre 
     expect(canManageOperations(tenant({ category: AccessCategory.OUVRIER }))).toBe(false);
   });
 
-  it("denies access for a plain COMMERCIAL USER without MANAGE_SETTINGS", () => {
-    expect(canManageOperations(tenant({ category: AccessCategory.COMMERCIAL }))).toBe(false);
-  });
-
-  it("grants access via the MANAGE_SETTINGS permission itself (COMMERCIAL MANAGER)", () => {
+  it("grants access via the MANAGE_SETTINGS permission itself", () => {
     expect(
       canManageOperations(
-        tenant({ category: AccessCategory.COMMERCIAL, permissions: new Set([Permission.MANAGE_SETTINGS]) })
+        tenant({ category: AccessCategory.OUVRIER, permissions: new Set([Permission.MANAGE_SETTINGS]) })
       )
     ).toBe(true);
   });
@@ -171,8 +132,8 @@ describe("requireCrmAccess permission gating", () => {
     await expect(requireCrmAccess(toCtx(user), crm.id)).resolves.toMatchObject({ crmId: crm.id });
   });
 
-  it("succeeds when checking a permission the USER role does have (VIEW)", async () => {
-    await expect(requireCrmAccess(toCtx(user), crm.id, Permission.VIEW)).resolves.toMatchObject({ crmId: crm.id });
+  it("refuse une permission non accordée explicitement, le rôle n'en donnant plus aucune (VIEW)", async () => {
+    await expect(requireCrmAccess(toCtx(user), crm.id, Permission.VIEW)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("throws FORBIDDEN (not CRM_ACCESS_DENIED) when the user has CRM access but lacks the specific permission (DELETE)", async () => {

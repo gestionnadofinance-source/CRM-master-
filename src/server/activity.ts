@@ -10,10 +10,6 @@ export interface LogActivityInput {
   entityId?: string | null;
   oldValue?: unknown;
   newValue?: unknown;
-  clientId?: string;
-  prospectId?: string;
-  quoteId?: string;
-  appointmentId?: string;
 }
 
 /** Journalise une action métier. Ne doit jamais faire échouer l'opération appelante. */
@@ -28,10 +24,6 @@ export async function logActivity(input: LogActivityInput): Promise<void> {
         entityId: input.entityId ?? null,
         oldValue: input.oldValue === undefined ? undefined : (input.oldValue as object),
         newValue: input.newValue === undefined ? undefined : (input.newValue as object),
-        clientId: input.clientId,
-        prospectId: input.prospectId,
-        quoteId: input.quoteId,
-        appointmentId: input.appointmentId,
       },
     });
     if (input.crmId) {

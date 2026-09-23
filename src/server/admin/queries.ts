@@ -8,11 +8,10 @@ export interface CrmDashboardRow {
   color: string;
   isActive: boolean;
   activeUsers: number;
-  prospects: number;
-  clients: number;
-  appointments: number;
-  quotes: number;
-  revenueAccepted: number;
+  chantiers: number;
+  chantiersEnCours: number;
+  pointages: number;
+  vaultDocuments: number;
   recentActivity: {
     id: string;
     action: string;
@@ -23,26 +22,23 @@ export interface CrmDashboardRow {
 }
 
 /**
- * Indicateurs agrégés par CRM pour le tableau de bord admin. Chaque CRM est
- * interrogé indépendamment : les compteurs métier (prospects, clients,
- * devis, CA) ne sont jamais fusionnés entre CRM, seul le total d'utilisateurs
- * actifs de la société (portée propre à l'admin) peut être vu globalement.
+ * Indicateurs agrégés par espace pour le tableau de bord d'administration.
+ * Chaque espace est interrogé indépendamment : les compteurs métier
+ * (chantiers, pointages, documents) ne sont jamais fusionnés entre espaces,
+ * seul le total d'utilisateurs actifs de la société (portée propre à
+ * l'administration) peut être vu globalement.
  */
 export async function getCrmDashboardRows(): Promise<CrmDashboardRow[]> {
   const crms = await prisma.crm.findMany({ orderBy: { order: "asc" } });
 
   return Promise.all(
     crms.map(async (crm) => {
-      const [activeUsers, prospects, clients, appointments, quotes, accepted, recentActivity] = await Promise.all([
+      const [activeUsers, chantiers, chantiersEnCours, pointages, vaultDocuments, recentActivity] = await Promise.all([
         prisma.userCrmAccess.count({ where: { crmId: crm.id, user: { status: "ACTIVE" } } }),
-        prisma.prospect.count({ where: { crmId: crm.id } }),
-        prisma.client.count({ where: { crmId: crm.id } }),
-        prisma.appointment.count({ where: { crmId: crm.id } }),
-        prisma.quote.count({ where: { crmId: crm.id } }),
-        prisma.quote.aggregate({
-          where: { crmId: crm.id, status: "ACCEPTED" },
-          _sum: { totalTtc: true },
-        }),
+        prisma.chantier.count({ where: { crmId: crm.id } }),
+        prisma.chantier.count({ where: { crmId: crm.id, status: "IN_PROGRESS" } }),
+        prisma.pointage.count({ where: { crmId: crm.id } }),
+        prisma.vaultDocument.count({ where: { crmId: crm.id } }),
         prisma.activityLog.findMany({
           where: { crmId: crm.id },
           orderBy: { createdAt: "desc" },
@@ -58,12 +54,11 @@ export async function getCrmDashboardRows(): Promise<CrmDashboardRow[]> {
         color: crm.color,
         isActive: crm.isActive,
         activeUsers,
-        prospects,
-        clients,
-        appointments,
-        quotes,
-        revenueAccepted: Number(accepted._sum.totalTtc ?? 0),
-        recentActivity: recentActivity.map((a) => ({
+        chantiers,
+        chantiersEnCours,
+        pointages,
+        vaultDocuments,
+        recentActivity: recentActivity.map((a: (typeof recentActivity)[number]) => ({
           id: a.id,
           action: a.action,
           entityType: a.entityType,
