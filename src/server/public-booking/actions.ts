@@ -15,6 +15,7 @@ import {
 } from "@/server/public-booking/availability";
 import { startOfDay } from "date-fns";
 import { assertNotRateLimited, recordRateLimitHit } from "@/lib/rate-limit";
+import { MAX_CODE, MAX_ID, tooLong } from "@/lib/validation";
 
 const PUBLIC_SOURCE_NAME = "Réservation en ligne";
 
@@ -124,9 +125,9 @@ export async function getPublicFirstAvailable(
 // ============================================================================
 
 const bookingSubmitSchema = z.object({
-  commercialId: z.string().trim().min(1, "Veuillez choisir un commercial."),
-  startAt: z.string().min(1, "Créneau invalide."),
-  endAt: z.string().min(1, "Créneau invalide."),
+  commercialId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Veuillez choisir un commercial."),
+  startAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1, "Créneau invalide."),
+  endAt: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1, "Créneau invalide."),
   firstName: z.string().trim().min(1, "Le prénom est obligatoire.").max(100),
   lastName: z.string().trim().min(1, "Le nom est obligatoire.").max(100),
   email: z.string().trim().email("Adresse email invalide.").max(200),

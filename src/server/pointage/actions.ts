@@ -16,6 +16,7 @@ import { VaultDocumentCategory } from "@prisma/client";
 import { findOrCreateRootFolder } from "@/server/vault/actions";
 import { computePointageTotals, mondayOf, buildEmptyWeek, type PointageDay } from "@/server/pointage/calc";
 import { renderEmployeeTimesheetPdf, renderClientTimesheetPdf } from "@/server/pointage/pdf";
+import { MAX_CODE, MAX_ID, MAX_LONG, tooLong } from "@/lib/validation";
 
 export interface ActionResult {
   ok: boolean;
@@ -306,9 +307,9 @@ const boolField = z
   .transform((v) => v === "true");
 
 const upsertSchema = z.object({
-  employeeId: z.string().min(1),
-  weekStart: z.string().min(1),
-  days: z.string().min(1),
+  employeeId: z.string().max(MAX_ID, tooLong(MAX_ID)).min(1),
+  weekStart: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  days: z.string().max(MAX_LONG, tooLong(MAX_LONG)).min(1),
   housingAllowance: z.coerce.number().min(0).max(10000).default(0),
   dirtAllowance: z.coerce.number().min(0).max(10000).default(0),
   hourlyRate: z.coerce.number().min(0).max(1000).default(0),

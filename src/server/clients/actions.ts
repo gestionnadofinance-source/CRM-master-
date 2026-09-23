@@ -6,11 +6,13 @@ import { requireAuth, type AuthContext } from "@/server/auth/session";
 import { requireCrmAccess, assertBelongsToCrm } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { logActivity } from "@/server/activity";
+import { runSerializable, type TransactionClient } from "@/server/transactions";
 import { notifyCrm } from "@/server/notifications/create";
 import { publishToCrm } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { ClientStatus } from "@prisma/client";
 import { removeStorageKeys } from "@/lib/storage";
+import { MAX_CODE, MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
 
 function emptyToNull(v: FormDataEntryValue | null): string | null {
   const s = v == null ? "" : String(v).trim();
@@ -18,25 +20,25 @@ function emptyToNull(v: FormDataEntryValue | null): string | null {
 }
 
 const clientInputSchema = z.object({
-  company: z.string().trim().min(1, "L'entreprise est obligatoire."),
-  sector: z.string().trim().nullable(),
-  firstName: z.string().trim().nullable(),
-  lastName: z.string().trim().nullable(),
-  phone: z.string().trim().nullable(),
-  email: z.string().trim().email("Adresse email invalide.").nullable().or(z.literal(null)),
-  address: z.string().trim().nullable(),
-  activity: z.string().trim().nullable(),
-  size: z.string().trim().nullable(),
+  company: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "L'entreprise est obligatoire."),
+  sector: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).email("Adresse email invalide.").nullable().or(z.literal(null)),
+  address: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).nullable(),
+  activity: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  size: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
   siret: z
     .string()
     .trim()
     .regex(/^\d{14}$/, "Le SIRET doit comporter 14 chiffres.")
     .nullable(),
   status: z.nativeEnum(ClientStatus),
-  sourceId: z.string().trim().nullable(),
-  ownerId: z.string().trim().min(1, "Le commercial est obligatoire."),
-  notes: z.string().trim().nullable(),
-  tagIds: z.array(z.string()),
+  sourceId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+  ownerId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le commercial est obligatoire."),
+  notes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
+  tagIds: z.array(z.string().max(MAX_ID, tooLong(MAX_ID))),
 });
 
 export type ClientInput = z.infer<typeof clientInputSchema>;
@@ -82,36 +84,45 @@ export async function createClient(crmId: string, formData: FormData, actorCtx?:
 
   const confirmDuplicate = formData.get("confirmDuplicate") === "true";
 
-  if (parsed.siret && !confirmDuplicate) {
-    const existing = await prisma.client.findFirst({
-      where: { crmId: tenant.crmId, siret: parsed.siret },
-      select: { id: true, company: true },
-    });
-    if (existing) {
-      return { ok: false, duplicate: existing };
-    }
-  }
+  const data = {
+    crmId: tenant.crmId,
+    company: parsed.company,
+    sector: parsed.sector,
+    firstName: parsed.firstName,
+    lastName: parsed.lastName,
+    phone: parsed.phone,
+    email: parsed.email,
+    address: parsed.address,
+    activity: parsed.activity,
+    size: parsed.size,
+    siret: parsed.siret,
+    status: parsed.status,
+    sourceId: parsed.sourceId,
+    ownerId: parsed.ownerId,
+    notes: parsed.notes,
+    tags: { create: parsed.tagIds.map((tagId) => ({ tagId })) },
+  };
 
-  const client = await prisma.client.create({
-    data: {
-      crmId: tenant.crmId,
-      company: parsed.company,
-      sector: parsed.sector,
-      firstName: parsed.firstName,
-      lastName: parsed.lastName,
-      phone: parsed.phone,
-      email: parsed.email,
-      address: parsed.address,
-      activity: parsed.activity,
-      size: parsed.size,
-      siret: parsed.siret,
-      status: parsed.status,
-      sourceId: parsed.sourceId,
-      ownerId: parsed.ownerId,
-      notes: parsed.notes,
-      tags: { create: parsed.tagIds.map((tagId) => ({ tagId })) },
-    },
-  });
+  // Le contrôle de doublon et la création tiennent dans une seule
+  // transaction sérialisable : en READ COMMITTED, deux créations
+  // simultanées portant le même SIRET ne voient ni l'une ni l'autre de
+  // doublon et insèrent toutes les deux. Sans SIRET, ou quand
+  // l'utilisateur a confirmé vouloir le doublon, il n'y a rien à lire :
+  // création directe, sans le coût de la sérialisation.
+  const outcome =
+    parsed.siret && !confirmDuplicate
+      ? await runSerializable(async (tx) => {
+          const existing = await tx.client.findFirst({
+            where: { crmId: tenant.crmId, siret: parsed.siret },
+            select: { id: true, company: true },
+          });
+          if (existing) return { duplicate: existing };
+          return { client: await tx.client.create({ data }) };
+        })
+      : { client: await prisma.client.create({ data }) };
+
+  if ("duplicate" in outcome) return { ok: false, duplicate: outcome.duplicate };
+  const client = outcome.client;
 
   await logActivity({
     crmId: tenant.crmId,
@@ -154,16 +165,10 @@ export async function updateClient(
   if ("error" in parsed) return { ok: false, error: parsed.error };
 
   const confirmDuplicate = formData.get("confirmDuplicate") === "true";
-  if (parsed.siret && parsed.siret !== existing.siret && !confirmDuplicate) {
-    const dup = await prisma.client.findFirst({
-      where: { crmId: tenant.crmId, siret: parsed.siret, id: { not: clientId } },
-      select: { id: true, company: true },
-    });
-    if (dup) return { ok: false, duplicate: dup };
-  }
+  const checkSiret = Boolean(parsed.siret) && parsed.siret !== existing.siret && !confirmDuplicate;
 
-  await prisma.$transaction([
-    prisma.client.update({
+  const applyUpdate = async (tx: TransactionClient) => {
+    await tx.client.update({
       where: { id: clientId },
       data: {
         company: parsed.company,
@@ -181,10 +186,29 @@ export async function updateClient(
         ownerId: parsed.ownerId,
         notes: parsed.notes,
       },
-    }),
-    prisma.clientTag.deleteMany({ where: { clientId } }),
-    prisma.clientTag.createMany({ data: parsed.tagIds.map((tagId) => ({ clientId, tagId })) }),
-  ]);
+    });
+    await tx.clientTag.deleteMany({ where: { clientId } });
+    await tx.clientTag.createMany({ data: parsed.tagIds.map((tagId) => ({ clientId, tagId })) });
+  };
+
+  // Même course qu'à la création quand le SIRET change : le contrôle de
+  // doublon et la mise à jour doivent tenir dans une seule transaction
+  // sérialisable. Sans changement de SIRET, la mise à jour ne dépend
+  // d'aucune lecture concurrente et garde l'isolation par défaut.
+  if (checkSiret) {
+    const dup = await runSerializable(async (tx) => {
+      const found = await tx.client.findFirst({
+        where: { crmId: tenant.crmId, siret: parsed.siret, id: { not: clientId } },
+        select: { id: true, company: true },
+      });
+      if (found) return found;
+      await applyUpdate(tx);
+      return null;
+    });
+    if (dup) return { ok: false, duplicate: dup };
+  } else {
+    await prisma.$transaction(applyUpdate);
+  }
 
   await logActivity({
     crmId: tenant.crmId,
@@ -247,11 +271,11 @@ export async function deleteClient(crmId: string, clientId: string, actorCtx?: A
 // ---------------------------------------------------------------------------
 
 const contactSchema = z.object({
-  firstName: z.string().trim().min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().min(1, "Le nom est obligatoire."),
-  role: z.string().trim().nullable(),
-  phone: z.string().trim().nullable(),
-  email: z.string().trim().email("Adresse email invalide.").nullable().or(z.literal(null)),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  role: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).email("Adresse email invalide.").nullable().or(z.literal(null)),
 });
 
 export async function addClientContact(crmId: string, clientId: string, formData: FormData): Promise<ClientActionResult> {

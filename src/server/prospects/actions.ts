@@ -6,6 +6,7 @@ import { requireAuth, type AuthContext } from "@/server/auth/session";
 import { requireCrmAccess, assertBelongsToCrm } from "@/server/tenant";
 import { Permission } from "@/server/permissions";
 import { logActivity } from "@/server/activity";
+import { runSerializable, type TransactionClient } from "@/server/transactions";
 import { notifyCrm } from "@/server/notifications/create";
 import { publishToCrm } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
@@ -14,6 +15,7 @@ import { ProspectStatus } from "@prisma/client";
 import { computeProspectScore } from "@/server/prospects/scoring";
 import { listCrmMembers } from "@/server/shared/members";
 import { removeStorageKeys } from "@/lib/storage";
+import { MAX_CODE, MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
 
 function emptyToNull(v: FormDataEntryValue | null): string | null {
   const s = v == null ? "" : String(v).trim();
@@ -60,26 +62,26 @@ export async function recomputeProspectScore(prospectId: string) {
 }
 
 const prospectInputSchema = z.object({
-  company: z.string().trim().min(1, "L'entreprise est obligatoire."),
-  firstName: z.string().trim().nullable(),
-  lastName: z.string().trim().nullable(),
-  phone: z.string().trim().nullable(),
-  email: z.string().trim().email("Adresse email invalide.").nullable().or(z.literal(null)),
-  address: z.string().trim().nullable(),
+  company: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "L'entreprise est obligatoire."),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).email("Adresse email invalide.").nullable().or(z.literal(null)),
+  address: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).nullable(),
   siret: z
     .string()
     .trim()
     .regex(/^\d{14}$/, "Le SIRET doit comporter 14 chiffres.")
     .nullable(),
-  sector: z.string().trim().nullable(),
-  activity: z.string().trim().nullable(),
-  size: z.string().trim().nullable(),
-  sourceId: z.string().trim().nullable(),
-  ownerId: z.string().trim().min(1, "Le commercial est obligatoire."),
+  sector: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  activity: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  size: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
+  sourceId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+  ownerId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le commercial est obligatoire."),
   status: z.nativeEnum(ProspectStatus),
   potentialAmount: z.number().nullable(),
-  notes: z.string().trim().nullable(),
-  tagIds: z.array(z.string()),
+  notes: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
+  tagIds: z.array(z.string().max(MAX_ID, tooLong(MAX_ID))),
 });
 
 export type ProspectInput = z.infer<typeof prospectInputSchema>;
@@ -152,35 +154,44 @@ export async function createProspect(
   if (refError) return { ok: false, error: refError };
 
   const confirmDuplicate = formData.get("confirmDuplicate") === "true";
-  if (parsed.siret && !confirmDuplicate) {
-    const existing = await prisma.prospect.findFirst({
-      where: { crmId: tenant.crmId, siret: parsed.siret },
-      select: { id: true, company: true },
-    });
-    if (existing) return { ok: false, duplicate: existing };
-  }
 
-  const prospect = await prisma.prospect.create({
-    data: {
-      crmId: tenant.crmId,
-      company: parsed.company,
-      firstName: parsed.firstName,
-      lastName: parsed.lastName,
-      phone: parsed.phone,
-      email: parsed.email,
-      address: parsed.address,
-      siret: parsed.siret,
-      sector: parsed.sector,
-      activity: parsed.activity,
-      size: parsed.size,
-      sourceId: parsed.sourceId,
-      ownerId: parsed.ownerId,
-      status: parsed.status,
-      potentialAmount: parsed.potentialAmount,
-      notes: parsed.notes,
-      tags: { create: parsed.tagIds.map((tagId) => ({ tagId })) },
-    },
-  });
+  const data = {
+    crmId: tenant.crmId,
+    company: parsed.company,
+    firstName: parsed.firstName,
+    lastName: parsed.lastName,
+    phone: parsed.phone,
+    email: parsed.email,
+    address: parsed.address,
+    siret: parsed.siret,
+    sector: parsed.sector,
+    activity: parsed.activity,
+    size: parsed.size,
+    sourceId: parsed.sourceId,
+    ownerId: parsed.ownerId,
+    status: parsed.status,
+    potentialAmount: parsed.potentialAmount,
+    notes: parsed.notes,
+    tags: { create: parsed.tagIds.map((tagId) => ({ tagId })) },
+  };
+
+  // Contrôle de doublon et création dans la même transaction sérialisable
+  // (même course que côté clients, cf. src/server/transactions.ts). Sans
+  // SIRET, ou sur doublon confirmé, aucune lecture n'est en jeu.
+  const outcome =
+    parsed.siret && !confirmDuplicate
+      ? await runSerializable(async (tx) => {
+          const existing = await tx.prospect.findFirst({
+            where: { crmId: tenant.crmId, siret: parsed.siret },
+            select: { id: true, company: true },
+          });
+          if (existing) return { duplicate: existing };
+          return { prospect: await tx.prospect.create({ data }) };
+        })
+      : { prospect: await prisma.prospect.create({ data }) };
+
+  if ("duplicate" in outcome) return { ok: false, duplicate: outcome.duplicate };
+  const prospect = outcome.prospect;
 
   await recomputeProspectScore(prospect.id);
 
@@ -258,19 +269,13 @@ export async function updateProspect(
   if (refError) return { ok: false, error: refError };
 
   const confirmDuplicate = formData.get("confirmDuplicate") === "true";
-  if (parsed.siret && parsed.siret !== existing.siret && !confirmDuplicate) {
-    const dup = await prisma.prospect.findFirst({
-      where: { crmId: tenant.crmId, siret: parsed.siret, id: { not: prospectId } },
-      select: { id: true, company: true },
-    });
-    if (dup) return { ok: false, duplicate: dup };
-  }
+  const checkSiret = Boolean(parsed.siret) && parsed.siret !== existing.siret && !confirmDuplicate;
 
   const lastContactAtRaw = emptyToNull(formData.get("lastContactAt"));
   const nextContactAtRaw = emptyToNull(formData.get("nextContactAt"));
 
-  await prisma.$transaction([
-    prisma.prospect.update({
+  const applyUpdate = async (tx: TransactionClient) => {
+    await tx.prospect.update({
       where: { id: prospectId },
       data: {
         company: parsed.company,
@@ -291,10 +296,25 @@ export async function updateProspect(
         ...(lastContactAtRaw ? { lastContactAt: new Date(lastContactAtRaw) } : {}),
         ...(nextContactAtRaw ? { nextContactAt: new Date(nextContactAtRaw) } : {}),
       },
-    }),
-    prisma.prospectTag.deleteMany({ where: { prospectId } }),
-    prisma.prospectTag.createMany({ data: parsed.tagIds.map((tagId) => ({ prospectId, tagId })) }),
-  ]);
+    });
+    await tx.prospectTag.deleteMany({ where: { prospectId } });
+    await tx.prospectTag.createMany({ data: parsed.tagIds.map((tagId) => ({ prospectId, tagId })) });
+  };
+
+  if (checkSiret) {
+    const dup = await runSerializable(async (tx) => {
+      const found = await tx.prospect.findFirst({
+        where: { crmId: tenant.crmId, siret: parsed.siret, id: { not: prospectId } },
+        select: { id: true, company: true },
+      });
+      if (found) return found;
+      await applyUpdate(tx);
+      return null;
+    });
+    if (dup) return { ok: false, duplicate: dup };
+  } else {
+    await prisma.$transaction(applyUpdate);
+  }
 
   await recomputeProspectScore(prospectId);
 
@@ -353,11 +373,11 @@ export async function deleteProspect(
 // ---------------------------------------------------------------------------
 
 const contactSchema = z.object({
-  firstName: z.string().trim().min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().min(1, "Le nom est obligatoire."),
-  role: z.string().trim().nullable(),
-  phone: z.string().trim().nullable(),
-  email: z.string().trim().email("Adresse email invalide.").nullable().or(z.literal(null)),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  role: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).nullable(),
+  phone: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).email("Adresse email invalide.").nullable().or(z.literal(null)),
 });
 
 export async function addProspectContact(crmId: string, prospectId: string, formData: FormData): Promise<ProspectActionResult> {

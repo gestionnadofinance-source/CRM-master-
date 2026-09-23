@@ -10,6 +10,7 @@ import { hashPassword, generateTemporaryPassword } from "@/lib/crypto";
 import { sendEmail, baseEmailLayout } from "@/lib/email";
 import { getServerEnv } from "@/lib/env";
 import { logActivity } from "@/server/activity";
+import { MAX_SHORT, tooLong } from "@/lib/validation";
 
 export interface ActionResult {
   ok: boolean;
@@ -66,9 +67,9 @@ export async function listCrmUsers(crmId: string) {
 }
 
 const createSchema = z.object({
-  firstName: z.string().trim().min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().min(1, "Le nom est obligatoire."),
-  email: z.string().trim().toLowerCase().email("Adresse email invalide."),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).toLowerCase().email("Adresse email invalide."),
   role: z.nativeEnum(CrmRole),
   category: z.nativeEnum(AccessCategory),
   isForeman: z.coerce.boolean().default(false),
@@ -163,8 +164,8 @@ export async function createCrmUser(crmId: string, formData: FormData): Promise<
 }
 
 const updateSchema = z.object({
-  firstName: z.string().trim().min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().min(1, "Le nom est obligatoire."),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
   role: z.nativeEnum(CrmRole),
   category: z.nativeEnum(AccessCategory),
   isForeman: z.coerce.boolean().default(false),

@@ -13,6 +13,7 @@ import { logActivity } from "@/server/activity";
 import { provisionCrm } from "@/server/admin/provision-crm";
 import { publishToCrm } from "@/lib/realtime";
 import { computeAccessDiff } from "@/server/admin/access-diff";
+import { MAX_CODE, MAX_ID, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
 
 async function requireGlobalAdmin() {
   const ctx = await requireAuth();
@@ -30,7 +31,7 @@ export interface ActionResult {
 // ---------------------------------------------------------------------------
 
 const accessEntrySchema = z.object({
-  crmId: z.string().min(1),
+  crmId: z.string().max(MAX_ID, tooLong(MAX_ID)).min(1),
   role: z.nativeEnum(CrmRole),
   category: z.nativeEnum(AccessCategory),
   // Profil "chef de chantier" (catégorie OUVRIER uniquement) : voir
@@ -51,11 +52,11 @@ const accessEntrySchema = z.object({
 });
 
 const createUserSchema = z.object({
-  firstName: z.string().trim().min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().min(1, "Le nom est obligatoire."),
-  email: z.string().trim().toLowerCase().email("Adresse email invalide."),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  email: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).toLowerCase().email("Adresse email invalide."),
   isGlobalAdmin: z.boolean(),
-  color: z.string().trim().min(1),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
   access: z.array(accessEntrySchema),
 });
 
@@ -174,8 +175,8 @@ export async function createUser(formData: FormData): Promise<CreateUserResult> 
 }
 
 const updateUserSchema = z.object({
-  firstName: z.string().trim().min(1, "Le prénom est obligatoire."),
-  lastName: z.string().trim().min(1, "Le nom est obligatoire."),
+  firstName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
   isGlobalAdmin: z.boolean(),
   access: z.array(accessEntrySchema),
 });
@@ -404,10 +405,10 @@ export async function deleteUserActivityHistory(userId: string, confirmEmail: st
 // ---------------------------------------------------------------------------
 
 const createCrmSchema = z.object({
-  name: z.string().trim().min(1, "Le nom est obligatoire."),
-  slug: z.string().trim().optional(),
-  color: z.string().trim().min(1),
-  description: z.string().trim().optional(),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  slug: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).optional(),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).optional(),
 });
 
 export interface CreateCrmResult extends ActionResult {
@@ -445,9 +446,9 @@ export async function createCrm(formData: FormData): Promise<CreateCrmResult> {
 }
 
 const updateCrmSchema = z.object({
-  name: z.string().trim().min(1, "Le nom est obligatoire."),
-  description: z.string().trim().optional(),
-  color: z.string().trim().min(1),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom est obligatoire."),
+  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).optional(),
+  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
   isActive: z.boolean(),
 });
 

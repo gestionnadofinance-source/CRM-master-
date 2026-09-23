@@ -10,6 +10,7 @@ import { publishToCrm } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { recomputeProspectScore } from "@/server/prospects/actions";
 import { listCrmMembers } from "@/server/shared/members";
+import { MAX_ID, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
 
 export interface PipelineActionResult {
   ok: boolean;
@@ -27,13 +28,13 @@ function emptyToNull(v: FormDataEntryValue | null): string | null {
 // ---------------------------------------------------------------------------
 
 const opportunityInputSchema = z.object({
-  title: z.string().trim().min(1, "Le titre est obligatoire."),
+  title: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le titre est obligatoire."),
   amount: z.number().nullable(),
-  ownerId: z.string().trim().min(1, "Le commercial est obligatoire."),
-  clientId: z.string().trim().nullable(),
-  prospectId: z.string().trim().nullable(),
-  stageId: z.string().trim().min(1, "L'étape est obligatoire."),
-  nextAction: z.string().trim().nullable(),
+  ownerId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le commercial est obligatoire."),
+  clientId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+  prospectId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+  stageId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "L'étape est obligatoire."),
+  nextAction: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).nullable(),
 });
 
 function parseOpportunityForm(formData: FormData) {

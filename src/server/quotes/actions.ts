@@ -16,28 +16,29 @@ import { QUOTE_STATUS_TRANSITIONS } from "@/server/quotes/status";
 import { revalidatePath } from "next/cache";
 import { QuoteStatus } from "@prisma/client";
 import { advanceProspectOpportunityStage } from "@/server/pipeline/actions";
+import { MAX_ID, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
 
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
 const quoteItemInputSchema = z.object({
-  id: z.string().trim().optional(), // présent = ligne existante (informatif seulement, on réécrit toujours)
-  designation: z.string().trim().min(1, "La désignation est obligatoire."),
+  id: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).optional(), // présent = ligne existante (informatif seulement, on réécrit toujours)
+  designation: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).min(1, "La désignation est obligatoire."),
   quantity: z.coerce.number().positive("La quantité doit être strictement positive."),
   unitPriceHt: z.coerce.number().min(0, "Le prix unitaire doit être positif ou nul."),
-  vatRateId: z.string().trim().min(1, "Le taux de TVA est obligatoire."),
+  vatRateId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le taux de TVA est obligatoire."),
 });
 
 const quoteSaveSchema = z
   .object({
-    clientId: z.string().trim().nullable(),
-    prospectId: z.string().trim().nullable(),
-    object: z.string().trim().min(1, "L'objet est obligatoire."),
+    clientId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+    prospectId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+    object: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "L'objet est obligatoire."),
     issueDate: z.coerce.date({ errorMap: () => ({ message: "Date d'émission invalide." }) }),
     validUntil: z.coerce.date({ errorMap: () => ({ message: "Date de validité invalide." }) }),
-    conditions: z.string().trim().nullable().optional(),
-    mentions: z.string().trim().nullable().optional(),
+    conditions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable().optional(),
+    mentions: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable().optional(),
     items: z.array(quoteItemInputSchema).min(1, "Ajoutez au moins une ligne de devis."),
   })
   .refine((data) => data.validUntil >= data.issueDate, {

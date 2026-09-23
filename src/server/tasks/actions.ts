@@ -10,6 +10,7 @@ import { publishToCrm, publishToUser } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { TaskPriority, TaskStatus } from "@prisma/client";
 import { listCrmMembers } from "@/server/shared/members";
+import { MAX_CODE, MAX_ID, MAX_LONG, MAX_SHORT, tooLong } from "@/lib/validation";
 
 // Les tâches sont un outil personnel/d'équipe courant : contrairement aux
 // modules métier (clients, devis...), leur création/édition n'est PAS
@@ -24,16 +25,16 @@ function emptyToNull(v: FormDataEntryValue | null): string | null {
 }
 
 const taskInputSchema = z.object({
-  title: z.string().trim().min(1, "Le titre est obligatoire."),
-  description: z.string().trim().nullable(),
-  assigneeId: z.string().trim().min(1, "Le responsable est obligatoire."),
-  clientId: z.string().trim().nullable(),
-  prospectId: z.string().trim().nullable(),
-  quoteId: z.string().trim().nullable(),
-  appointmentId: z.string().trim().nullable(),
+  title: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le titre est obligatoire."),
+  description: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
+  assigneeId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1, "Le responsable est obligatoire."),
+  clientId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+  prospectId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+  quoteId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
+  appointmentId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).nullable(),
   priority: z.nativeEnum(TaskPriority),
   status: z.nativeEnum(TaskStatus),
-  dueAt: z.string().trim().nullable(),
+  dueAt: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).nullable(),
 });
 
 function parseTaskForm(formData: FormData) {
@@ -122,8 +123,8 @@ async function notifyAssigneeIfNeeded(
 }
 
 const rangeSchema = z.object({
-  start: z.string().min(1),
-  end: z.string().min(1),
+  start: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
+  end: z.string().max(MAX_CODE, tooLong(MAX_CODE)).min(1),
 });
 
 /**

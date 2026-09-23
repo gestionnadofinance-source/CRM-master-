@@ -9,17 +9,18 @@ import { logActivity } from "@/server/activity";
 import { revalidatePath } from "next/cache";
 import { AutomationTrigger, TaskPriority } from "@prisma/client";
 import { runNoActivitySweep } from "./engine";
+import { MAX_LONG, MAX_SHORT, tooLong } from "@/lib/validation";
 
 // Toute lecture/écriture des règles d'automatisation est réservée aux
 // utilisateurs disposant de Permission.MANAGE_SETTINGS sur le CRM concerné :
 // il s'agit de configuration d'administration, pas d'usage courant.
 
 const ruleInputSchema = z.object({
-  name: z.string().trim().min(1, "Le nom de la règle est obligatoire."),
+  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le nom de la règle est obligatoire."),
   trigger: z.nativeEnum(AutomationTrigger),
   delayDays: z.coerce.number().int().min(0, "Le délai doit être positif.").max(3650),
-  actionTitle: z.string().trim().min(1, "Le titre de la tâche est obligatoire."),
-  actionDescription: z.string().trim().nullable(),
+  actionTitle: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).min(1, "Le titre de la tâche est obligatoire."),
+  actionDescription: z.string().trim().max(MAX_LONG, tooLong(MAX_LONG)).nullable(),
   actionPriority: z.nativeEnum(TaskPriority),
   actionAssignTo: z.enum(["OWNER", "CREATOR"]),
   actionDueInDays: z.coerce.number().int().min(0).max(3650),

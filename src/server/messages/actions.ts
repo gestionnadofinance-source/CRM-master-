@@ -17,6 +17,7 @@ import { publishToCrm, publishToUser } from "@/lib/realtime";
 import { uploadDocument } from "@/server/documents/actions";
 import { revalidatePath } from "next/cache";
 import { DocumentEntity, ThreadType, Prisma, type MessageThread } from "@prisma/client";
+import { MAX_ID, tooLong } from "@/lib/validation";
 
 // ----------------------------------------------------------------------------
 // Helpers internes
@@ -272,7 +273,7 @@ export async function getThreadMessages(
 // Écriture
 // ----------------------------------------------------------------------------
 
-const directThreadSchema = z.object({ otherUserId: z.string().trim().min(1) });
+const directThreadSchema = z.object({ otherUserId: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1) });
 
 /** Démarre (ou récupère) la conversation 1:1 entre l'utilisateur courant et un autre membre du CRM. */
 export async function startDirectThread(crmSlug: string, otherUserId: string) {
@@ -327,7 +328,7 @@ export async function startDirectThread(crmSlug: string, otherUserId: string) {
 
 const groupThreadSchema = z.object({
   name: z.string().trim().min(1, "Le nom du groupe est obligatoire.").max(100, "Nom trop long (100 caractères max)."),
-  participantIds: z.array(z.string().trim().min(1)).min(1, "Sélectionnez au moins un participant."),
+  participantIds: z.array(z.string().trim().max(MAX_ID, tooLong(MAX_ID)).min(1)).min(1, "Sélectionnez au moins un participant."),
 });
 
 /** Crée une conversation de groupe. L'auteur y est automatiquement ajouté. */

@@ -72,9 +72,29 @@ export async function withWriteErrorHandling(fn: () => Promise<NextResponse>): P
       const status = err.code === "FORBIDDEN" ? 403 : err.code === "CRM_ACCESS_DENIED" ? 404 : 401;
       return NextResponse.json({ error: err.message }, { status });
     }
-    if (err instanceof Error) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
+    // Tout le reste est inattendu : les server actions réutilisées ici
+    // rendent leurs erreurs métier dans un `ActionResult` (traduit par
+    // actionResultResponse), pas en levant. Renvoyer `err.message` au
+    // client exposerait donc des détails internes — requête Prisma, nom de
+    // colonne, chaîne de connexion tronquée. Le détail va au journal
+    // serveur, l'appelant reçoit un message stable.
+    console.error("[public-api] erreur non gérée sur une route d'écriture", err);
+
+    // Seule exception : les erreurs Prisma dont le code désigne sans
+    // ambiguïté une requête fautive côté appelant (référence inconnue,
+    // valeur trop longue...). Elles méritent un 4xx pour rester
+    // exploitables, avec un libellé fixe qui ne cite ni table ni colonne.
+    const code = err && typeof err === "object" ? (err as { code?: unknown }).code : undefined;
+    if (code === "P2025") {
+      return NextResponse.json({ error: "Ressource introuvable." }, { status: 404 });
     }
-    return NextResponse.json({ error: "Erreur inattendue." }, { status: 500 });
+    if (code === "P2002") {
+      return NextResponse.json({ error: "Une ressource équivalente existe déjà." }, { status: 409 });
+    }
+    if (code === "P2000" || code === "P2003" || code === "P2011" || code === "P2012") {
+      return NextResponse.json({ error: "Requête invalide : référence ou valeur incorrecte." }, { status: 400 });
+    }
+
+    return NextResponse.json({ error: "Erreur interne." }, { status: 500 });
   }
 }
