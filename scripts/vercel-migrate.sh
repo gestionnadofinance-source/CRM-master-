@@ -1,5 +1,23 @@
 #!/bin/sh
-# Applique les migrations Prisma avec plusieurs tentatives.
+# Prépare la base au déploiement : migrations Prisma puis seed, avec
+# plusieurs tentatives sur les migrations.
+#
+# GARDE-FOU D'ENVIRONNEMENT — à lire avant de le retirer.
+#
+# Vercel exécute `vercel-build` pour TOUS les déploiements, Preview
+# comprise, et une Preview part d'un simple push de branche. Tant que les
+# environnements Preview et Production partagent la même base (voir README,
+# « État du projet et limites connues »), une build Preview applique ses
+# migrations et son seed aux données RÉELLES. Une branche portant une
+# migration destructrice casse alors la production sans que rien n'ait été
+# fusionné dans main — c'est exactement ce qui est arrivé le 23/09/2026 avec
+# la migration de retrait du volet commercial.
+#
+# Ce script ne touche donc à la base que sur l'environnement de production.
+# Une Preview se contente de se construire contre le schéma existant.
+#
+# Quand Preview aura sa propre base Neon, ce garde-fou pourra être assoupli —
+# mais il ne coûte rien à conserver.
 #
 # Sur les fournisseurs Postgres "scale-to-zero" (ex. Neon en offre
 # gratuite), le compute peut être suspendu entre deux déploiements. La
@@ -8,6 +26,16 @@
 # consultatif (P1002) — sans que ce délai soit configurable. Les tentatives
 # suivantes, une fois le compute réveillé, aboutissent normalement.
 set -e
+
+# VERCEL_ENV vaut "production", "preview" ou "development" sur Vercel, et
+# n'existe pas ailleurs (build locale, CI). Absente, on procède : seul un
+# environnement Vercel explicitement NON production est écarté, jamais un
+# usage local qui, lui, vise une base de développement.
+if [ -n "$VERCEL_ENV" ] && [ "$VERCEL_ENV" != "production" ]; then
+  echo "VERCEL_ENV=$VERCEL_ENV : migrations et seed ignorés."
+  echo "Seul l'environnement de production écrit dans la base (voir l'en-tête de ce script)."
+  exit 0
+fi
 
 # Prisma Migrate exige une connexion DIRECTE (non poolée) via DIRECT_URL :
 # les poolers en mode transaction (PgBouncer, pooler Neon) ne supportent pas
@@ -52,6 +80,9 @@ delay=5
 for i in $(seq 1 "$attempts"); do
   if output=$(npx prisma migrate deploy 2>&1); then
     printf '%s\n' "$output"
+    # Le seed écrit lui aussi (espaces, administrateur initial) : il doit
+    # rester derrière le même garde-fou que les migrations.
+    npx tsx prisma/seed.ts
     exit 0
   fi
   printf '%s\n' "$output"

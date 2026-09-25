@@ -540,10 +540,19 @@ Points identifiés pour une suite de développement :
 - **Preview et Production partagent actuellement la même base Neon**
   (vérifié directement en comparant l'hôte de connexion résolu par
   `DATABASE_URL` dans chaque environnement Vercel : identique dans les
-  deux cas). Toute build Preview (déclenchée par une simple ouverture de
-  PR) lit et écrit donc dans les données réelles — aucune isolation
-  n'existe aujourd'hui entre les deux. Correction nécessitant un accès au
-  tableau de bord Neon (hors du périmètre de ce dépôt de code) :
+  deux cas).
+
+  **Atténué** : `scripts/vercel-migrate.sh` n'applique migrations et seed
+  que lorsque `VERCEL_ENV` vaut `production`. Une build Preview se
+  construit désormais contre le schéma existant sans jamais y écrire.
+  Sans ce garde-fou, un simple push de branche portant une migration
+  destructrice cassait la production — c'est arrivé le 23/09/2026 avec la
+  migration de retrait du volet commercial, alors que rien n'avait été
+  fusionné dans `main`.
+
+  Une Preview **lit** toujours les données réelles. L'isolation complète
+  demande un accès au tableau de bord Neon (hors du périmètre de ce dépôt
+  de code) :
   1. créer une branche Neon dédiée (ex. `preview`), issue de la branche
      de production ;
   2. dans Vercel → Project Settings → Environment Variables, remplacer
