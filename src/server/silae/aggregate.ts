@@ -33,6 +33,12 @@ import { splitWeeklyOvertime } from "@/server/silae/overtime";
 
 export interface AggregationWeekInput {
   weekStart: Date;
+  /**
+   * Chantier de la semaine. Indispensable pour les frais rattachés à
+   * l'AFFECTATION (frais SNCF, retenue de chambre) : ils ne doivent être
+   * comptés qu'une fois par chantier, mais bien une fois PAR chantier.
+   */
+  chantierId: string;
   days: PointageDay[];
   hourlyRate: number;
   nightRatePercent: number;
@@ -109,7 +115,10 @@ export function aggregateEmployeeMonth(
   const anomalies: WeekAnomaly[] = [];
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   let monthHours = 0;
-  const countedAssignmentExpenses = { sncf: 0, room: 0 };
+  // Frais d'affectation retenus, PAR CHANTIER : une fois par chantier, jamais
+  // une fois par semaine (ils seraient multipliés) ni une fois pour le mois
+  // entier (les chantiers suivants seraient perdus).
+  const assignmentExpenses = new Map<string, { sncf: number; room: number }>();
 
   for (const week of weeks) {
     const inMonth = week.days.filter((d) => d.date.startsWith(monthPrefix));
@@ -182,16 +191,27 @@ export function aggregateEmployeeMonth(
       add(totals, "primeSalissure", week.dirtAllowance);
       add(totals, "grandDeplacement53", week.gdDepl53Count);
       add(totals, "grandDeplacement80", week.gdDepl80Count);
-      // Frais rattachés à l'AFFECTATION et non à la semaine : comptés une
-      // seule fois pour le mois, sinon ils seraient multipliés par le
-      // nombre de semaines pointées sur ce chantier.
-      countedAssignmentExpenses.sncf = Math.max(countedAssignmentExpenses.sncf, week.sncfExpense);
-      countedAssignmentExpenses.room = Math.max(countedAssignmentExpenses.room, week.roomDeduction);
+      // Frais rattachés à l'AFFECTATION et non à la semaine : retenus une
+      // seule fois par chantier, sinon ils seraient multipliés par le nombre
+      // de semaines pointées sur ce chantier.
+      const previous = assignmentExpenses.get(week.chantierId) ?? { sncf: 0, room: 0 };
+      assignmentExpenses.set(week.chantierId, {
+        sncf: Math.max(previous.sncf, week.sncfExpense),
+        room: Math.max(previous.room, week.roomDeduction),
+      });
     }
   }
 
-  add(totals, "fraisSncf", countedAssignmentExpenses.sncf);
-  add(totals, "retenueChambre", countedAssignmentExpenses.room);
+  // Puis additionnés entre chantiers : un salarié envoyé sur deux chantiers
+  // dans le mois a droit aux frais des deux.
+  let sncfTotal = 0;
+  let roomTotal = 0;
+  for (const { sncf, room } of assignmentExpenses.values()) {
+    sncfTotal += sncf;
+    roomTotal += room;
+  }
+  add(totals, "fraisSncf", round2(sncfTotal));
+  add(totals, "retenueChambre", round2(roomTotal));
 
   return { totals, anomalies, monthHours };
 }

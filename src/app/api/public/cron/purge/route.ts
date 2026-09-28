@@ -27,7 +27,7 @@ function timingSafeStringEqual(a: string, b: string): boolean {
  *
  * IMPORTANT — emplacement de la route : ce handler vit sous `/api/public/...`
  * (et non `/api/cron/...`) car `src/proxy.ts` exige un cookie de session sur
- * toute route qui ne commence pas par `/api/public`, `/book/`, `/_next` ou
+ * toute route qui ne commence pas par `/api/public`, `/_next` ou
  * `/favicon`. Un ordonnanceur externe n'a jamais de session navigateur :
  * sous `/api/cron`, cette route aurait été systématiquement redirigée vers
  * `/login` avant même d'atteindre le code ci-dessous. La sécurité réelle

@@ -42,7 +42,9 @@ export function CrmSwitcher({ current, options }: { current: CrmOption; options:
               key={opt.id}
               onClick={() => {
                 setOpen(false);
-                router.push(`/c/${opt.slug}/dashboard`);
+                // Planning : seule page commune à tous les profils. Le
+                // tableau de bord par espace n'existe plus.
+                router.push(`/c/${opt.slug}/planning`);
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text hover:bg-bg-subtle"
             >

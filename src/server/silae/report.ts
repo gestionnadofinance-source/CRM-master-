@@ -53,6 +53,42 @@ export interface MappingRow {
   exported: boolean;
 }
 
+/** Absence du mois, à ressaisir à la main tant que l'export n'existe pas. */
+export interface AbsenceInput {
+  employeeName: string;
+  type: string;
+  startDate: Date;
+  endDate: Date;
+  hours: number | null;
+  days: number | null;
+}
+
+const ABSENCE_LABELS: Record<string, string> = {
+  CONGE_PAYE: "Congé payé",
+  MALADIE: "Maladie",
+  ABSENCE_INJUSTIFIEE: "Absence injustifiée",
+  REPOS_COMPENSATEUR: "Repos compensateur",
+  ACCIDENT_TRAVAIL: "Accident du travail",
+  CONGE_SANS_SOLDE: "Congé sans solde",
+  AUTRE: "Autre",
+};
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * Une absence par ligne, nommément : sans cela le gestionnaire de paie n'a
+ * aucune liste de ce qu'il doit ressaisir, et une absence saisie dans le CRM
+ * disparaît silencieusement de la paie.
+ */
+function absenceReminder(a: AbsenceInput): string {
+  const label = ABSENCE_LABELS[a.type] ?? a.type;
+  const periode = isoDay(a.startDate) === isoDay(a.endDate)
+    ? `le ${isoDay(a.startDate)}`
+    : `du ${isoDay(a.startDate)} au ${isoDay(a.endDate)}`;
+  const duree = a.hours != null ? ` — ${a.hours} h` : a.days != null ? ` — ${a.days} j` : "";
+  return `${a.employeeName} : ${label}, ${periode}${duree}.`;
+}
+
 export interface EmployeeInput {
   userId: string;
   name: string;
@@ -73,7 +109,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export function buildSilaeReport(
   employees: EmployeeInput[],
   mappings: MappingRow[],
-  context: { year: number; month: number; dossier: string }
+  context: { year: number; month: number; dossier: string; absences?: AbsenceInput[] }
 ): { report: SilaeReport; lines: SilaeLine[] } {
   const byRubrique = new Map(mappings.map((m) => [m.rubrique, m]));
   const lines: SilaeLine[] = [];
@@ -134,17 +170,25 @@ export function buildSilaeReport(
     }
   }
 
+  const absences = context.absences ?? [];
+  const reminders = [
+    "Les saisies sur salaire, changements de RIB et d'adresse ne passent pas par cet import : à traiter directement dans Silae.",
+    absences.length === 0
+      ? "Les absences et congés payés ne sont pas encore exportés : le format de fichier Silae doit être récupéré auprès du gestionnaire de paie."
+      : `${absences.length} absence(s) saisie(s) sur ce mois, à ressaisir à la main dans Silae (l'export des absences n'existe pas encore) :`,
+    ...absences.map(absenceReminder),
+    "Les heures fériées chômées ne sont pas calculées par le CRM : à saisir à la main si elles s'appliquent.",
+  ];
+
   return {
     report: {
-      ...context,
+      year: context.year,
+      month: context.month,
+      dossier: context.dossier,
       employees: reportEmployees,
       blocking,
       warnings: Array.from(warningSet).sort(),
-      reminders: [
-        "Les saisies sur salaire, changements de RIB et d'adresse ne passent pas par cet import : à traiter directement dans Silae.",
-        "Les absences et congés payés ne sont pas encore exportés : le format de fichier Silae doit être récupéré auprès du gestionnaire de paie.",
-        "Les heures fériées chômées ne sont pas calculées par le CRM : à saisir à la main si elles s'appliquent.",
-      ],
+      reminders,
       lineCount: lines.length,
     },
     lines,

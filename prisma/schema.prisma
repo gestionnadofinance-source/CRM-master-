@@ -176,18 +176,18 @@ enum Permission {
 }
 
 // Catégorie d'accès d'un utilisateur pour un CRM donné : détermine quels
-// onglets/fonctions sont visibles, indépendamment du rôle (MANAGER/USER)
-// qui ne joue que sur le niveau de permission au sein de la catégorie
-// COMMERCIAL. Un OUVRIER n'a par défaut aucune permission commerciale
-// (voir src/server/permissions.ts effectivePermissions) : seuls Planning
-// et Coffre-fort lui sont accessibles, appliqué à la fois côté navigation
-// (src/lib/nav.ts) et côté serveur (src/app/c/[crmSlug]/layout.tsx).
-// SECRETAIRE n'a, comme OUVRIER, aucune permission commerciale par défaut,
-// mais a accès en plus à Tableau de bord, Utilisateurs (gestion des accès
-// de CE CRM), Planning, Pointage salariés/client, Coffre-fort et Activité —
-// jamais à Pipeline/Agenda/Clients/Prospects/Devis/Tâches/Messagerie/
-// Paramètres CRM (données commerciales), voir canManageOperations dans
-// src/server/tenant.ts.
+// onglets/fonctions sont visibles. Depuis le retrait du volet commercial,
+// le rôle (MANAGER/USER) n'accorde plus rien par lui-même — voir
+// effectivePermissions dans src/server/permissions.ts.
+//
+// OUVRIER : Planning et Coffre-fort, plus Pointage salariés/client s'il est
+// chef de chantier (isForeman). SECRETAIRE et COMPTABLE (périmètres
+// identiques, voir isTransverseCategory) : les mêmes, plus Comptabilité,
+// Import Silae, Utilisateurs (accès de CET espace) et Activité — jamais les
+// Paramètres, qui exigent MANAGE_SETTINGS. Ce filtrage est appliqué côté
+// navigation (src/lib/nav.ts) ET côté serveur, qui seul fait foi
+// (src/app/c/[crmSlug]/layout.tsx, canManageOperations dans
+// src/server/tenant.ts).
 enum AccessCategory {
   OUVRIER
   SECRETAIRE
@@ -284,38 +284,6 @@ model CrmPointageSettings {
 }
 
 // ============================================================================
-// CONFIGURATION PAR CRM : pipeline, sources, tags, champs personnalisés, TVA
-// ============================================================================
-
-// ============================================================================
-// CLIENTS & PROSPECTS
-// ============================================================================
-
-// ============================================================================
-// PIPELINE COMMERCIAL
-// ============================================================================
-
-// ============================================================================
-// AGENDA & RÉSERVATION
-// ============================================================================
-
-// ============================================================================
-// TÂCHES
-// ============================================================================
-
-// ============================================================================
-// DEVIS
-// ============================================================================
-
-// ============================================================================
-// DOCUMENTS
-// ============================================================================
-
-// ============================================================================
-// MESSAGERIE INTERNE (isolée par CRM)
-// ============================================================================
-
-// ============================================================================
 // NOTIFICATIONS
 // ============================================================================
 
@@ -341,14 +309,6 @@ model Notification {
 
   @@index([crmId, userId, readAt])
 }
-
-// ============================================================================
-// MODÈLES EMAIL & AUTOMATISATIONS
-// ============================================================================
-
-// ============================================================================
-// OBJECTIFS COMMERCIAUX
-// ============================================================================
 
 // ============================================================================
 // JOURNAL D'ACTIVITÉ
@@ -529,7 +489,7 @@ model Pointage {
 }
 
 // ============================================================================
-// COFFRE-FORT (Ouvrier + Commercial) — documents personnels, isolés par
+// COFFRE-FORT — documents personnels, isolés par
 // utilisateur : jamais visibles par un autre utilisateur. Déposés par un
 // administrateur, ou par un chef de chantier pour les feuilles de pointage
 // qu'il génère (voir src/server/vault/actions.ts et

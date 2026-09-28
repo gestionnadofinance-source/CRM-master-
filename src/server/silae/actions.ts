@@ -8,7 +8,7 @@ import { requireOperationsAccess } from "@/server/tenant";
 import { logActivity } from "@/server/activity";
 import { RUBRIQUES } from "@/server/silae/rubriques";
 import { aggregateEmployeeMonth, type AggregationWeekInput } from "@/server/silae/aggregate";
-import { buildSilaeReport, type MappingRow, type SilaeReport } from "@/server/silae/report";
+import { buildSilaeReport, type AbsenceInput, type MappingRow, type SilaeReport } from "@/server/silae/report";
 import { encodeSilaeCsv, renderSilaeCsv, silaeFileName, type SilaeEncoding } from "@/server/silae/csv";
 import type { PointageDay } from "@/server/pointage/calc";
 import { CONTROL_CHARS_MESSAGE, MAX_CODE, MAX_SHORT, NO_CONTROL_CHARS, tooLong } from "@/lib/validation";
@@ -38,8 +38,8 @@ function toDayArray(value: unknown): PointageDay[] {
  * paramétrage des espaces DÉJÀ créés, sans migration ni ré-exécution du
  * seed.
  */
-export async function listSilaeMappings(crmId: string): Promise<MappingRow[]> {
-  const ctx = await requireAuth();
+export async function listSilaeMappings(crmId: string, actorCtx?: AuthContext): Promise<MappingRow[]> {
+  const ctx = actorCtx ?? (await requireAuth());
   const tenant = await requireOperationsAccess(ctx, crmId);
 
   const existing = await prisma.silaeCodeMapping.findMany({ where: { crmId: tenant.crmId } });
@@ -144,10 +144,34 @@ async function collectMonth(crmId: string, year: number, month: number, options:
     prisma.userCrmAccess.findMany({ where: { crmId }, select: { userId: true, silaeMatricule: true } }),
   ]);
 
+  // Les absences ne sont pas exportées (format Silae encore inconnu) : elles
+  // doivent donc au moins être NOMMÉES dans le rapport, sinon une absence
+  // saisie ici disparaît purement et simplement de la paie. On retient toute
+  // absence qui chevauche le mois, pas seulement celles qui y commencent.
+  const absenceRows = await prisma.absence.findMany({
+    where: { crmId, startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
+    include: { user: { select: { firstName: true, lastName: true } } },
+    orderBy: { startDate: "asc" },
+  });
+  const absences: AbsenceInput[] = absenceRows.map((a) => ({
+    employeeName: `${a.user.firstName} ${a.user.lastName}`.trim(),
+    type: a.type,
+    startDate: a.startDate,
+    endDate: a.endDate,
+    hours: a.hours === null ? null : Number(a.hours),
+    days: a.days === null ? null : Number(a.days),
+  }));
+
   const matriculeByUser = new Map(accesses.map((a) => [a.userId, a.silaeMatricule?.trim() || null]));
 
   const assignments = await prisma.chantierAssignment.findMany({
-    where: { chantierId: { in: Array.from(new Set(pointages.map((p) => p.chantierId))) } },
+    where: {
+      chantierId: { in: Array.from(new Set(pointages.map((p) => p.chantierId))) },
+      // Les identifiants viennent déjà de pointages filtrés par crmId, mais
+      // la règle du schéma vaut pour TOUTE requête : on ne s'en remet pas à
+      // la provenance des identifiants.
+      chantier: { crmId },
+    },
   });
   const assignmentByKey = new Map(assignments.map((a) => [`${a.chantierId}\u0000${a.userId}`, a]));
 
@@ -160,6 +184,7 @@ async function collectMonth(crmId: string, year: number, month: number, options:
     };
     entry.weeks.push({
       weekStart: p.weekStart,
+      chantierId: p.chantierId,
       days: toDayArray(p.days),
       hourlyRate: Number(p.hourlyRate),
       nightRatePercent: Number(p.nightRatePercent),
@@ -238,7 +263,7 @@ async function collectMonth(crmId: string, year: number, month: number, options:
     })
     .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
-  return { employees, dossier: crm.name };
+  return { employees, dossier: crm.name, absences };
 }
 
 export interface SilaePreviewResult extends ActionResult {
@@ -255,9 +280,9 @@ export async function previewSilaeExport(
   const ctx = actorCtx ?? (await requireAuth());
   const tenant = await requireOperationsAccess(ctx, crmId);
 
-  const mappings = await listSilaeMappings(tenant.crmId);
-  const { employees, dossier } = await collectMonth(tenant.crmId, year, month, options);
-  const { report } = buildSilaeReport(employees, mappings, { year, month, dossier });
+  const mappings = await listSilaeMappings(tenant.crmId, ctx);
+  const { employees, dossier, absences } = await collectMonth(tenant.crmId, year, month, options);
+  const { report } = buildSilaeReport(employees, mappings, { year, month, dossier, absences });
   return { ok: true, report };
 }
 
@@ -272,14 +297,15 @@ export async function generateSilaeExport(
   crmId: string,
   year: number,
   month: number,
-  options: SilaeExportOptions = {}
+  options: SilaeExportOptions = {},
+  actorCtx?: AuthContext
 ): Promise<SilaeGenerateResult> {
-  const ctx = await requireAuth();
+  const ctx = actorCtx ?? (await requireAuth());
   const tenant = await requireOperationsAccess(ctx, crmId);
 
-  const mappings = await listSilaeMappings(tenant.crmId);
-  const { employees, dossier } = await collectMonth(tenant.crmId, year, month, options);
-  const { report, lines } = buildSilaeReport(employees, mappings, { year, month, dossier });
+  const mappings = await listSilaeMappings(tenant.crmId, ctx);
+  const { employees, dossier, absences } = await collectMonth(tenant.crmId, year, month, options);
+  const { report, lines } = buildSilaeReport(employees, mappings, { year, month, dossier, absences });
 
   if (report.blocking.length > 0) {
     return { ok: false, error: "Des points bloquants doivent être levés avant de générer le fichier.", report };

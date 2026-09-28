@@ -42,7 +42,6 @@ export default function proxy(request: NextRequest) {
 
   if (
     pathname.startsWith("/api/public") ||
-    pathname.startsWith("/book/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     // robots.txt doit rester lisible sans session : redirigé vers /login, il

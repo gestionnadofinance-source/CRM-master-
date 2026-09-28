@@ -58,7 +58,10 @@ export default async function CrmLayout({
     const relativePath = pathname.replace(`/c/${crmSlug}`, "") || "/";
     const isAllowed = allowedPrefixes.some((p) => relativePath === p || relativePath.startsWith(`${p}/`));
     if (!isAllowed) {
-      redirect(`/c/${crmSlug}/${tenant.category === "OUVRIER" ? "planning" : "dashboard"}`);
+      // Planning est la seule page commune aux trois publics. Le tableau de
+      // bord par espace a disparu avec le volet commercial : y renvoyer
+      // menait à un 404.
+      redirect(`/c/${crmSlug}/planning`);
     }
   }
 

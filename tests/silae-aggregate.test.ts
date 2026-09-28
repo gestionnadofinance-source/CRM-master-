@@ -33,6 +33,7 @@ function days(start: string, hoursPerDay: (number | null)[]): PointageDay[] {
 
 function week(over: Partial<AggregationWeekInput> & { days: PointageDay[]; weekStart: Date }): AggregationWeekInput {
   return {
+    chantierId: "chantier-1",
     hourlyRate: 12, nightRatePercent: 25, housingAllowance: 0, dirtAllowance: 0,
     gdDepl53Count: 0, gdDepl80Count: 0, chantierAmounts: NO_AMOUNTS, assignmentRates: NO_TRAVEL,
     applied: NOTHING_APPLIED, sncfExpense: 0, roomDeduction: 0, ...over,

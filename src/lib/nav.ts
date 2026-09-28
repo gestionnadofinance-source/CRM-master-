@@ -27,10 +27,11 @@ export interface NavItem {
   visibleTo: NavAudience[];
   /**
    * true : onglet réservé aux chefs de chantier, c'est-à-dire aux
-   * utilisateurs affectés à au moins un chantier avec le rôle FOREMAN
-   * (ChantierAssignment.role — géré dans Planning). Sans effet pour
-   * l'administration et la secrétaire, qui voient toujours l'onglet. Voir
-   * amIForeman dans src/server/pointage/actions.ts.
+   * utilisateurs dont l'accès porte isForeman (UserCrmAccess.isForeman,
+   * choisi à la création de l'utilisateur) ET qui sont affectés à au moins
+   * un chantier. Sans effet pour l'administration, la secrétaire et le
+   * comptable, qui voient toujours l'onglet. Voir amIForeman dans
+   * src/server/pointage/actions.ts.
    */
   foremanOnly?: boolean;
 }

@@ -33,3 +33,7 @@ next-env.d.ts
 .vercel
 .env*
 !.env.example
+
+# Fichiers générés par le build de Next.js pour les agents IA
+AGENTS.md
+CLAUDE.md
