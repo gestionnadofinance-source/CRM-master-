@@ -65,19 +65,23 @@ model User {
 
   crmAccess              UserCrmAccess[]
   sessions               Session[]
-  notifications          Notification[]             @relation("NotificationRecipient")
-  triggeredNotifications Notification[]             @relation("NotificationActor")
+  notifications          Notification[]       @relation("NotificationRecipient")
+  triggeredNotifications Notification[]       @relation("NotificationActor")
   activityLogs           ActivityLog[]
-  createdChantiers       Chantier[]                 @relation("ChantierCreatedBy")
-  chantierAssignments    ChantierAssignment[]       @relation("ChantierAssignments")
-  vaultDocuments         VaultDocument[]            @relation("VaultDocumentOwner")
-  uploadedVaultDocuments VaultDocument[]            @relation("VaultDocumentUploadedBy")
-  foremanVaultDocuments  VaultDocument[]            @relation("VaultDocumentForeman")
-  vaultFolders           VaultFolder[]              @relation("VaultFolderOwner")
-  createdVaultFolders    VaultFolder[]              @relation("VaultFolderCreatedBy")
-  pointagesAsEmployee    Pointage[]                 @relation("PointageEmployee")
-  pointagesAsForeman     Pointage[]                 @relation("PointageForeman")
-  createdApiKeys         ApiKey[]                   @relation("ApiKeyCreatedBy")
+  createdChantiers       Chantier[]           @relation("ChantierCreatedBy")
+  chantierAssignments    ChantierAssignment[] @relation("ChantierAssignments")
+  acomptes               Acompte[]            @relation("AcompteEmployee")
+  acomptesCreated        Acompte[]            @relation("AcompteCreatedBy")
+  absences               Absence[]            @relation("AbsenceEmployee")
+  absencesCreated        Absence[]            @relation("AbsenceCreatedBy")
+  vaultDocuments         VaultDocument[]      @relation("VaultDocumentOwner")
+  uploadedVaultDocuments VaultDocument[]      @relation("VaultDocumentUploadedBy")
+  foremanVaultDocuments  VaultDocument[]      @relation("VaultDocumentForeman")
+  vaultFolders           VaultFolder[]        @relation("VaultFolderOwner")
+  createdVaultFolders    VaultFolder[]        @relation("VaultFolderCreatedBy")
+  pointagesAsEmployee    Pointage[]           @relation("PointageEmployee")
+  pointagesAsForeman     Pointage[]           @relation("PointageForeman")
+  createdApiKeys         ApiKey[]             @relation("ApiKeyCreatedBy")
 
   @@index([email])
 }
@@ -140,15 +144,18 @@ model Crm {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  userAccess             UserCrmAccess[]
-  companySettings        CompanySettings?
-  pointageSettings       CrmPointageSettings?
-  notifications          Notification[]
-  activityLogs           ActivityLog[]
-  chantiers              Chantier[]
-  vaultDocuments         VaultDocument[]
-  vaultFolders           VaultFolder[]
-  pointages              Pointage[]
+  userAccess       UserCrmAccess[]
+  companySettings  CompanySettings?
+  pointageSettings CrmPointageSettings?
+  notifications    Notification[]
+  activityLogs     ActivityLog[]
+  chantiers        Chantier[]
+  vaultDocuments   VaultDocument[]
+  vaultFolders     VaultFolder[]
+  pointages        Pointage[]
+  silaeCodes       SilaeCodeMapping[]
+  acomptes         Acompte[]
+  absences         Absence[]
 
   @@index([slug])
 }
@@ -219,7 +226,12 @@ model UserCrmAccess {
   // nuit (voir Pointage.hourlyRate/nightRatePercent et
   // src/server/pointage/calc.ts) : nuit = heures de nuit × taux horaire ×
   // % de majoration.
-  defaultHourlyRate Decimal @default(0) @db.Decimal(8, 2)
+  defaultHourlyRate       Decimal @default(0) @db.Decimal(8, 2)
+
+  /// Matricule du salarié dans le dossier Silae de CET espace. Exigé par
+  /// l'export « Import Silae » : un salarié ayant des pointages mais pas de
+  /// matricule est signalé et bloque la génération.
+  silaeMatricule String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   crm  Crm  @relation(fields: [crmId], references: [id], onDelete: Cascade)
@@ -256,9 +268,9 @@ model CompanySettings {
 // chantier (voir Chantier) et les primes individuelles (logement,
 // salissure...) par salarié sur UserCrmAccess.
 model CrmPointageSettings {
-  id        String   @id @default(cuid())
-  crmId     String   @unique
-  crm       Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  crmId            String   @unique
+  crm              Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
   // % de majoration nuit par défaut (voir Pointage.nightRatePercent) —
   // remplace l'ancien taux fixe en euros : la majoration se calcule
   // maintenant à partir du taux horaire de base du salarié (voir
@@ -395,8 +407,8 @@ model Chantier {
   postBonus       Decimal @default(0) @db.Decimal(8, 2)
   // Ajoutés pour le tableau de comptabilité (transformation des fiches de
   // pointage déposées en tableau Excel — voir src/server/accounting).
-  mealAllowance Decimal @default(9.81) @db.Decimal(8, 2)
-  clothingBonus Decimal @default(0) @db.Decimal(8, 2)
+  mealAllowance   Decimal @default(9.81) @db.Decimal(8, 2)
+  clothingBonus   Decimal @default(0) @db.Decimal(8, 2)
 
   // Informations de mission, utilisées pour générer l'ordre de mission de
   // chaque salarié affecté (voir src/server/mission-order).
@@ -494,6 +506,12 @@ model Pointage {
   travelHoursReimbursementApplied Boolean @default(false)
   mealAllowanceApplied            Boolean @default(false)
   clothingBonusApplied            Boolean @default(false)
+
+  /// Nombres de grands déplacements de la semaine, par barème. Saisis par
+  /// le chef de chantier ; exportés tels quels vers Silae (un NOMBRE, pas
+  /// un montant — Silae applique le barème).
+  gdDepl53Count Int @default(0)
+  gdDepl80Count Int @default(0)
 
   comments String?
 
@@ -639,4 +657,87 @@ model ApiKey {
   createdAt   DateTime         @default(now())
   lastUsedAt  DateTime?
   revokedAt   DateTime?
+}
+
+/// Correspondance entre une rubrique du CRM et son code dans Silae.
+///
+/// Les codes doivent être STRICTEMENT identiques aux intitulés de colonne
+/// affichés dans Silae (Paramétrage > Variables à saisir), casse comprise :
+/// un code faux ne provoque AUCUNE erreur à l'import, la valeur est ignorée
+/// sans prévenir. D'où l'écran de paramétrage, modifiable sans développeur.
+model SilaeCodeMapping {
+  id         String   @id @default(cuid())
+  crmId      String
+  crm        Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  /// Clé de rubrique du CRM (voir src/server/silae/rubriques.ts).
+  rubrique   String
+  /// Code Silae. Vide = rubrique non paramétrée : le rapport de contrôle la
+  /// signale dès qu'elle porte une valeur.
+  silaeCode  String   @default("")
+  /// Multiplicateur appliqué avant export (ex. 20 pour envoyer un montant
+  /// là où le CRM compte des repas). 1 par défaut.
+  multiplier Decimal  @default(1) @db.Decimal(10, 4)
+  exported   Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([crmId, rubrique])
+  @@index([crmId])
+}
+
+/// Acompte versé à un salarié, rattaché à un mois de paie.
+model Acompte {
+  id           String   @id @default(cuid())
+  crmId        String
+  crm          Crm      @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation("AcompteEmployee", fields: [userId], references: [id], onDelete: Cascade)
+  amount       Decimal  @db.Decimal(10, 2)
+  paidOn       DateTime
+  /// Premier jour du mois de paie auquel l'acompte est imputé (UTC).
+  payrollMonth DateTime
+  comment      String?
+  createdById  String
+  createdBy    User     @relation("AcompteCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([crmId, payrollMonth])
+  @@index([userId])
+}
+
+enum AbsenceType {
+  CONGE_PAYE
+  MALADIE
+  ABSENCE_INJUSTIFIEE
+  REPOS_COMPENSATEUR
+  ACCIDENT_TRAVAIL
+  CONGE_SANS_SOLDE
+  AUTRE
+}
+
+/// Absence ou congé d'un salarié, saisi de façon structurée (et non plus en
+/// note libre sous la ligne TOTAL de l'Excel).
+///
+/// L'export des absences vers Silae utilise des codes AB- et un format de
+/// fichier propre, à récupérer auprès du gestionnaire de paie : la saisie
+/// existe ici, l'export viendra une fois ce format connu.
+model Absence {
+  id          String      @id @default(cuid())
+  crmId       String
+  crm         Crm         @relation(fields: [crmId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User        @relation("AbsenceEmployee", fields: [userId], references: [id], onDelete: Cascade)
+  type        AbsenceType
+  startDate   DateTime
+  endDate     DateTime
+  /// Durée en heures OU en jours selon la pratique de paie ; les deux sont
+  /// facultatives, le gestionnaire renseigne celle qui a du sens.
+  hours       Decimal?    @db.Decimal(6, 2)
+  days        Decimal?    @db.Decimal(5, 2)
+  comment     String?
+  createdById String
+  createdBy   User        @relation("AbsenceCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime    @default(now())
+
+  @@index([crmId, startDate])
+  @@index([userId])
 }
