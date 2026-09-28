@@ -216,9 +216,14 @@ Des administrateurs supplémentaires se créent ensuite depuis
   - **Chef de chantier** — un Ouvrier affecté à au moins un chantier avec le
     rôle `FOREMAN` (`ChantierAssignment.role`) ; il voit en plus les deux
     onglets de **Pointage**.
-  - **Secrétaire** — accès transverse à l'exploitation : Planning, Pointage,
-    Coffre-fort, Comptabilité, Utilisateurs et Activité. Jamais les
-    Paramètres, qui exigent `MANAGE_SETTINGS`.
+  - **Secrétaire** et **Comptable** — accès transverse à l'exploitation :
+    Planning, Pointage, Coffre-fort, Comptabilité, Import Silae,
+    Utilisateurs et Activité. Jamais les Paramètres, qui exigent
+    `MANAGE_SETTINGS`. Les deux catégories ont **exactement** les mêmes
+    droits : seul l'intitulé de la fonction les distingue. Cette
+    équivalence est écrite à un seul endroit, `isTransverseCategory`
+    (`src/lib/access-categories.ts`) — nulle part le code ne teste
+    `category === "SECRETAIRE"` directement.
 
   Cette restriction est appliquée à la fois côté navigation
   (`src/lib/nav.ts`) et côté serveur — un accès direct par URL à une page

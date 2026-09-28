@@ -2,7 +2,7 @@ import "server-only";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AuthError, type AuthContext } from "@/server/auth/session";
-import { Permission, CrmRole, AccessCategory, effectivePermissions, hasPermission } from "@/server/permissions";
+import { Permission, CrmRole, AccessCategory, effectivePermissions, hasPermission, isTransverseCategory } from "@/server/permissions";
 
 export interface TenantContext {
   crmId: string;
@@ -143,7 +143,7 @@ export async function listAccessibleCrms(ctx: AuthContext) {
  */
 export function requireOperationsCategory(tenant: TenantContext): void {
   if (tenant.isGlobalAdmin) return;
-  if (tenant.category !== AccessCategory.SECRETAIRE) {
+  if (!isTransverseCategory(tenant.category)) {
     redirect(`/c/${tenant.crmSlug}/planning`);
   }
 }
@@ -159,7 +159,7 @@ export function requireOperationsCategory(tenant: TenantContext): void {
  * catégorie explicite, ici, et nulle part ailleurs.
  */
 export function canManageOperations(tenant: TenantContext): boolean {
-  return tenant.isGlobalAdmin || tenant.category === AccessCategory.SECRETAIRE || tenant.permissions.has(Permission.MANAGE_SETTINGS);
+  return tenant.isGlobalAdmin || isTransverseCategory(tenant.category) || tenant.permissions.has(Permission.MANAGE_SETTINGS);
 }
 
 /** Comme requireCrmAccess, mais exige en plus canManageOperations (voir ci-dessus). */

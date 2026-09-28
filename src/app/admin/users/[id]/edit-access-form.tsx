@@ -6,6 +6,7 @@ import { updateUserAccess } from "@/server/admin/actions";
 import { Input, Select, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { AccessCategory } from "@prisma/client";
 
 interface CrmOption {
   id: string;
@@ -29,7 +30,7 @@ export function EditAccessForm({
   initialAccess: {
     crmId: string;
     role: "MANAGER" | "USER";
-    category: "COMMERCIAL" | "OUVRIER" | "SECRETAIRE";
+    category: AccessCategory;
     isForeman: boolean;
     defaultHourlyRate: number;
     defaultHousingAllowance: number;
@@ -43,7 +44,7 @@ export function EditAccessForm({
   const [success, setSuccess] = useState(false);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(initialIsGlobalAdmin);
   const [selectedCrms, setSelectedCrms] = useState<Set<string>>(new Set(initialAccess.map((a) => a.crmId)));
-  const [categoryByCrm, setCategoryByCrm] = useState<Record<string, "COMMERCIAL" | "OUVRIER" | "OUVRIER_FOREMAN" | "SECRETAIRE">>(
+  const [categoryByCrm, setCategoryByCrm] = useState<Record<string, AccessCategory | "OUVRIER_FOREMAN">>(
     Object.fromEntries(
       initialAccess.map((a) => [a.crmId, a.category === "OUVRIER" && a.isForeman ? "OUVRIER_FOREMAN" : a.category])
     )
@@ -106,8 +107,8 @@ export function EditAccessForm({
           <Label>Accès CRM</Label>
           <p className="mb-2 text-xs text-muted">
             Cochez au moins un espace, puis choisissez pour chacun la catégorie d&apos;accès (Ouvrier : Planning
-            et Coffre-fort · Chef de chantier : en plus, les deux onglets de Pointage · Secrétaire : accès
-            transverse à l&apos;exploitation) et le rôle. Les accès révoqués ou modifiés prennent effet
+            et Coffre-fort · Chef de chantier : en plus, les deux onglets de Pointage · Secrétaire et Comptable :
+            accès transverse à l&apos;exploitation) et le rôle. Les accès révoqués ou modifiés prennent effet
             immédiatement.
           </p>
           <div className="space-y-2">
@@ -146,13 +147,14 @@ export function EditAccessForm({
                             onChange={(e) =>
                               setCategoryByCrm((prev) => ({
                                 ...prev,
-                                [crm.id]: e.target.value as "COMMERCIAL" | "OUVRIER" | "OUVRIER_FOREMAN" | "SECRETAIRE",
+                                [crm.id]: e.target.value as AccessCategory | "OUVRIER_FOREMAN",
                               }))
                             }
                           >
                             <option value="OUVRIER">Ouvrier</option>
                             <option value="OUVRIER_FOREMAN">Ouvrier — Chef de chantier</option>
                             <option value="SECRETAIRE">Secrétaire</option>
+                            <option value="COMPTABLE">Comptable</option>
                           </Select>
                         </div>
                         <div>
@@ -169,11 +171,12 @@ export function EditAccessForm({
                           </Select>
                         </div>
                       </div>
-                      {categoryByCrm[crm.id] === "SECRETAIRE" && (
+                      {(categoryByCrm[crm.id] === "SECRETAIRE" || categoryByCrm[crm.id] === "COMPTABLE") && (
                         <p className="rounded-md border border-dashed border-border p-2 text-xs text-muted">
                           Accès transverse à l&apos;exploitation (Planning, Pointage, Coffre-fort,
-                          Comptabilité, Utilisateurs, Activité). Les Paramètres restent réservés à
-                          l&apos;administration.
+                          Comptabilité, Import Silae, Utilisateurs, Activité). Les Paramètres restent
+                          réservés à l&apos;administration. Secrétaire et Comptable ont exactement les
+                          mêmes droits : seul l&apos;intitulé de la fonction change.
                         </p>
                       )}
                       {(categoryByCrm[crm.id] === "OUVRIER" || categoryByCrm[crm.id] === "OUVRIER_FOREMAN") &&

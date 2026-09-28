@@ -17,6 +17,7 @@ import { findOrCreateRootFolder } from "@/server/vault/actions";
 import { computePointageTotals, mondayOf, buildEmptyWeek, type PointageDay } from "@/server/pointage/calc";
 import { renderEmployeeTimesheetPdf, renderClientTimesheetPdf } from "@/server/pointage/pdf";
 import { MAX_CODE, MAX_ID, MAX_LONG, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
+import { isTransverseCategory } from "@/server/permissions";
 
 export interface ActionResult {
   ok: boolean;
@@ -63,7 +64,7 @@ async function getIsForeman(userId: string, crmId: string): Promise<boolean> {
  * partout ailleurs dans l'application.
  */
 async function requireForeman(ctx: AuthContext, tenant: TenantContext, chantierId: string): Promise<void> {
-  if (tenant.isGlobalAdmin || tenant.category === "SECRETAIRE") return;
+  if (tenant.isGlobalAdmin || isTransverseCategory(tenant.category)) return;
   const isForeman = await getIsForeman(ctx.user.id, tenant.crmId);
   if (!isForeman) {
     throw new AuthError("FORBIDDEN", "Vous n'êtes pas chef de chantier.");
@@ -94,7 +95,7 @@ export async function listMyForemanChantiers(crmId: string) {
   const ctx = await requireAuth();
   const tenant = await requireCrmAccess(ctx, crmId);
 
-  if (tenant.isGlobalAdmin || tenant.category === "SECRETAIRE") {
+  if (tenant.isGlobalAdmin || isTransverseCategory(tenant.category)) {
     return prisma.chantier.findMany({
       where: { crmId: tenant.crmId },
       orderBy: { startDate: "desc" },
@@ -115,7 +116,7 @@ export async function listMyForemanChantiers(crmId: string) {
 export async function amIForeman(crmId: string): Promise<boolean> {
   const ctx = await requireAuth();
   const tenant = await requireCrmAccess(ctx, crmId);
-  if (tenant.isGlobalAdmin || tenant.category === "SECRETAIRE") return true;
+  if (tenant.isGlobalAdmin || isTransverseCategory(tenant.category)) return true;
   return getIsForeman(ctx.user.id, tenant.crmId);
 }
 
@@ -859,7 +860,7 @@ export async function deleteTimesheetDocument(crmId: string, documentId: string)
   if (doc.category !== VaultDocumentCategory.TIMESHEET_EMPLOYEE && doc.category !== VaultDocumentCategory.TIMESHEET_CLIENT) {
     return { ok: false, error: "Cette action ne concerne que les fiches de pointage." };
   }
-  if (!tenant.isGlobalAdmin && tenant.category !== "SECRETAIRE") {
+  if (!tenant.isGlobalAdmin && !isTransverseCategory(tenant.category)) {
     const isForeman = await getIsForeman(ctx.user.id, tenant.crmId);
     if (!isForeman) return { ok: false, error: "Réservé aux chefs de chantier et aux administrateurs." };
   }

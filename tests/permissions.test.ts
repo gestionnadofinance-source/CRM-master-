@@ -14,7 +14,7 @@ import type { Crm, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AuthError, type AuthContext, type SessionUser } from "@/server/auth/session";
 import { requireCrmAccess, canManageOperations, type TenantContext } from "@/server/tenant";
-import { CrmRole, AccessCategory, Permission, effectivePermissions, hasPermission } from "@/server/permissions";
+import { CrmRole, AccessCategory, Permission, effectivePermissions, hasPermission, isTransverseCategory } from "@/server/permissions";
 
 function toCtx(user: User): AuthContext {
   const sessionUser: SessionUser = {
@@ -38,7 +38,7 @@ describe("effectivePermissions / hasPermission", () => {
   // explicites posées sur UserCrmAccess.permissions en accordent. C'est ce
   // que ces tests fixent — y compris le fait qu'un rôle MANAGER n'ouvre
   // rien à lui seul.
-  for (const category of [AccessCategory.OUVRIER, AccessCategory.SECRETAIRE]) {
+  for (const category of [AccessCategory.OUVRIER, AccessCategory.SECRETAIRE, AccessCategory.COMPTABLE]) {
     it(`la catégorie ${category} n'a AUCUNE permission par défaut, même en rôle MANAGER`, () => {
       const access = { role: CrmRole.MANAGER, category, permissions: [] as Permission[] };
       for (const p of Object.values(Permission)) {
@@ -82,6 +82,18 @@ describe("canManageOperations (SECRETAIRE bypass for Planning/Coffre-fort/Ordre 
 
   it("grants access for SECRETAIRE even without MANAGE_SETTINGS", () => {
     expect(canManageOperations(tenant({ category: AccessCategory.SECRETAIRE }))).toBe(true);
+  });
+
+  it("grants access for COMPTABLE, strictement comme SECRETAIRE", () => {
+    // Les deux catégories doivent rester interchangeables : seul
+    // l'intitulé de la fonction les distingue (voir isTransverseCategory).
+    expect(canManageOperations(tenant({ category: AccessCategory.COMPTABLE }))).toBe(true);
+  });
+
+  it("isTransverseCategory reconnaît les deux catégories de gestion, et elles seules", () => {
+    expect(isTransverseCategory(AccessCategory.SECRETAIRE)).toBe(true);
+    expect(isTransverseCategory(AccessCategory.COMPTABLE)).toBe(true);
+    expect(isTransverseCategory(AccessCategory.OUVRIER)).toBe(false);
   });
 
   it("denies access for OUVRIER (no permission, no category bypass)", () => {

@@ -5,6 +5,7 @@ import { requireCrmAccessBySlug, listAccessibleCrms } from "@/server/tenant";
 import { AuthError } from "@/server/auth/session";
 import { amIForeman } from "@/server/pointage/actions";
 import { CrmShell } from "./crm-shell";
+import { isTransverseCategory } from "@/server/permissions";
 
 // Onglets accessibles à la catégorie OUVRIER. Ce contrôle est le pendant
 // serveur du filtrage visuel de la sidebar
@@ -16,10 +17,12 @@ import { CrmShell } from "./crm-shell";
 // Ouvrier, pas accessibles en écriture.
 const OUVRIER_ALLOWED_PREFIXES = ["/planning", "/vault", "/pointage-salaries", "/pointage-client"];
 
-// Catégorie SECRETAIRE : mêmes onglets que OUVRIER, plus Comptabilité,
+// Catégories d'exploitation transverse (Secrétaire, Comptable — voir
+// isTransverseCategory) : mêmes onglets que OUVRIER, plus Comptabilité,
+// Import Silae,
 // Utilisateurs (gestion des accès de CE CRM, voir /c/[crmSlug]/users) et
 // Activité. Jamais les Paramètres, qui exigent MANAGE_SETTINGS.
-const SECRETAIRE_ALLOWED_PREFIXES = [
+const TRANSVERSE_ALLOWED_PREFIXES = [
   "/planning",
   "/vault",
   "/pointage-salaries",
@@ -48,8 +51,8 @@ export default async function CrmLayout({
     throw err;
   }
 
-  if (!tenant.isGlobalAdmin && (tenant.category === "OUVRIER" || tenant.category === "SECRETAIRE")) {
-    const allowedPrefixes = tenant.category === "OUVRIER" ? OUVRIER_ALLOWED_PREFIXES : SECRETAIRE_ALLOWED_PREFIXES;
+  if (!tenant.isGlobalAdmin) {
+    const allowedPrefixes = isTransverseCategory(tenant.category) ? TRANSVERSE_ALLOWED_PREFIXES : OUVRIER_ALLOWED_PREFIXES;
     const hdrs = await headers();
     const pathname = hdrs.get("x-pathname") ?? "";
     const relativePath = pathname.replace(`/c/${crmSlug}`, "") || "/";

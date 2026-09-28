@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { CRM_NAV_ITEMS, type NavAudience } from "@/lib/nav";
 import type { AccessCategory } from "@prisma/client";
+import { isTransverseCategory } from "@/lib/access-categories";
 
 export function CrmSidebar({
   crmSlug,
@@ -20,7 +21,7 @@ export function CrmSidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const audience: NavAudience = isGlobalAdmin ? "ADMIN" : category === "SECRETAIRE" ? "SECRETAIRE" : "OUVRIER";
+  const audience: NavAudience = isGlobalAdmin ? "ADMIN" : isTransverseCategory(category) ? "GESTION" : "OUVRIER";
 
   return (
     <nav className="flex flex-col gap-0.5 p-3">

@@ -73,8 +73,8 @@ export interface CreateUserResult extends ActionResult {
 }
 
 /**
- * Le select "profil" d'un espace porte 3 valeurs : OUVRIER, SECRETAIRE, ou
- * OUVRIER_FOREMAN (Ouvrier — Chef de chantier). Cette dernière se traduit
+ * Le select "profil" d'un espace porte 4 valeurs : OUVRIER, SECRETAIRE,
+ * COMPTABLE, ou OUVRIER_FOREMAN (Ouvrier — Chef de chantier). Cette dernière se traduit
  * en category=OUVRIER + isForeman=true : le profil "chef de chantier" est
  * une variante de la catégorie Ouvrier, pas une catégorie à part.
  */

@@ -14,10 +14,10 @@ import {
 /**
  * Publics de la navigation, dérivés de AccessCategory :
  *   ADMIN      — administrateur global (User.isGlobalAdmin), voit tout ;
- *   SECRETAIRE — accès transverse à l'exploitation ;
+ *   GESTION    — accès transverse à l'exploitation (Secrétaire, Comptable) ;
  *   OUVRIER    — ouvrier et chef de chantier.
  */
-export type NavAudience = "ADMIN" | "SECRETAIRE" | "OUVRIER";
+export type NavAudience = "ADMIN" | "GESTION" | "OUVRIER";
 
 export interface NavItem {
   label: string;
@@ -42,13 +42,13 @@ export interface NavItem {
  * refusé.
  */
 export const CRM_NAV_ITEMS: NavItem[] = [
-  { label: "Planning", href: (s) => `/c/${s}/planning`, icon: CalendarRange, visibleTo: ["ADMIN", "SECRETAIRE", "OUVRIER"] },
-  { label: "Pointage salariés", href: (s) => `/c/${s}/pointage-salaries`, icon: ClipboardList, visibleTo: ["ADMIN", "SECRETAIRE", "OUVRIER"], foremanOnly: true },
-  { label: "Pointage client", href: (s) => `/c/${s}/pointage-client`, icon: ClipboardCheck, visibleTo: ["ADMIN", "SECRETAIRE", "OUVRIER"], foremanOnly: true },
-  { label: "Coffre-fort", href: (s) => `/c/${s}/vault`, icon: Lock, visibleTo: ["ADMIN", "SECRETAIRE", "OUVRIER"] },
-  { label: "Comptabilité", href: (s) => `/c/${s}/comptabilite`, icon: Calculator, visibleTo: ["ADMIN", "SECRETAIRE"] },
-  { label: "Import Silae", href: (s) => `/c/${s}/silae`, icon: FileSpreadsheet, visibleTo: ["ADMIN", "SECRETAIRE"] },
-  { label: "Utilisateurs", href: (s) => `/c/${s}/users`, icon: UserCog, visibleTo: ["ADMIN", "SECRETAIRE"] },
-  { label: "Activité", href: (s) => `/c/${s}/activity`, icon: History, visibleTo: ["ADMIN", "SECRETAIRE"] },
+  { label: "Planning", href: (s) => `/c/${s}/planning`, icon: CalendarRange, visibleTo: ["ADMIN", "GESTION", "OUVRIER"] },
+  { label: "Pointage salariés", href: (s) => `/c/${s}/pointage-salaries`, icon: ClipboardList, visibleTo: ["ADMIN", "GESTION", "OUVRIER"], foremanOnly: true },
+  { label: "Pointage client", href: (s) => `/c/${s}/pointage-client`, icon: ClipboardCheck, visibleTo: ["ADMIN", "GESTION", "OUVRIER"], foremanOnly: true },
+  { label: "Coffre-fort", href: (s) => `/c/${s}/vault`, icon: Lock, visibleTo: ["ADMIN", "GESTION", "OUVRIER"] },
+  { label: "Comptabilité", href: (s) => `/c/${s}/comptabilite`, icon: Calculator, visibleTo: ["ADMIN", "GESTION"] },
+  { label: "Import Silae", href: (s) => `/c/${s}/silae`, icon: FileSpreadsheet, visibleTo: ["ADMIN", "GESTION"] },
+  { label: "Utilisateurs", href: (s) => `/c/${s}/users`, icon: UserCog, visibleTo: ["ADMIN", "GESTION"] },
+  { label: "Activité", href: (s) => `/c/${s}/activity`, icon: History, visibleTo: ["ADMIN", "GESTION"] },
   { label: "Paramètres", href: (s) => `/c/${s}/settings`, icon: Settings, visibleTo: ["ADMIN"] },
 ];

@@ -191,6 +191,10 @@ enum Permission {
 enum AccessCategory {
   OUVRIER
   SECRETAIRE
+  /// Même périmètre que SECRETAIRE : seul l'intitulé de la fonction
+  /// change. Voir isTransverseCategory (src/server/permissions.ts), qui est
+  /// le seul endroit où les deux sont mises sur le même plan.
+  COMPTABLE
 }
 
 // Défaut de permissions accordées automatiquement par rôle : voir

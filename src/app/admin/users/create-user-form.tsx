@@ -6,6 +6,7 @@ import { Input, Select, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AccessCategory } from "@prisma/client";
 
 interface CrmOption {
   id: string;
@@ -20,7 +21,7 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
   const [result, setResult] = useState<CreateUserResult | null>(null);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
   const [selectedCrms, setSelectedCrms] = useState<Set<string>>(new Set());
-  const [categoryByCrm, setCategoryByCrm] = useState<Record<string, "COMMERCIAL" | "OUVRIER" | "OUVRIER_FOREMAN" | "SECRETAIRE">>({});
+  const [categoryByCrm, setCategoryByCrm] = useState<Record<string, AccessCategory | "OUVRIER_FOREMAN">>({});
   const [copied, setCopied] = useState(false);
 
   function toggleCrm(id: string) {
@@ -124,8 +125,8 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
           <Label>Accès CRM</Label>
           <p className="mb-2 text-xs text-muted">
             Cochez au moins un espace, puis choisissez pour chacun la catégorie d&apos;accès (Ouvrier : Planning
-            et Coffre-fort · Chef de chantier : en plus, les deux onglets de Pointage · Secrétaire : accès
-            transverse à l&apos;exploitation) et le rôle.
+            et Coffre-fort · Chef de chantier : en plus, les deux onglets de Pointage · Secrétaire et Comptable :
+            accès transverse à l&apos;exploitation) et le rôle.
           </p>
           <div className="space-y-2">
             {crms.length === 0 && <p className="text-sm text-muted">Aucun CRM disponible.</p>}
@@ -164,13 +165,14 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
                             onChange={(e) =>
                               setCategoryByCrm((prev) => ({
                                 ...prev,
-                                [crm.id]: e.target.value as "COMMERCIAL" | "OUVRIER" | "OUVRIER_FOREMAN" | "SECRETAIRE",
+                                [crm.id]: e.target.value as AccessCategory | "OUVRIER_FOREMAN",
                               }))
                             }
                           >
                             <option value="OUVRIER">Ouvrier</option>
                             <option value="OUVRIER_FOREMAN">Ouvrier — Chef de chantier</option>
                             <option value="SECRETAIRE">Secrétaire</option>
+                            <option value="COMPTABLE">Comptable</option>
                           </Select>
                         </div>
                         <div>
@@ -183,11 +185,12 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
                           </Select>
                         </div>
                       </div>
-                      {categoryByCrm[crm.id] === "SECRETAIRE" && (
+                      {(categoryByCrm[crm.id] === "SECRETAIRE" || categoryByCrm[crm.id] === "COMPTABLE") && (
                         <p className="rounded-md border border-dashed border-border p-2 text-xs text-muted">
                           Accès transverse à l&apos;exploitation (Planning, Pointage, Coffre-fort,
-                          Comptabilité, Utilisateurs, Activité). Les Paramètres restent réservés à
-                          l&apos;administration.
+                          Comptabilité, Import Silae, Utilisateurs, Activité). Les Paramètres restent
+                          réservés à l&apos;administration. Secrétaire et Comptable ont exactement les
+                          mêmes droits : seul l&apos;intitulé de la fonction change.
                         </p>
                       )}
                       {(categoryByCrm[crm.id] === "OUVRIER" || categoryByCrm[crm.id] === "OUVRIER_FOREMAN") && (

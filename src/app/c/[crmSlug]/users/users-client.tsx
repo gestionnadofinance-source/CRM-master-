@@ -16,8 +16,9 @@ import { Input, Select, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/modal";
 import { formatDate, initials } from "@/lib/utils";
+import type { AccessCategory } from "@prisma/client";
 
-type Category = "COMMERCIAL" | "OUVRIER" | "SECRETAIRE";
+type Category = AccessCategory;
 type Role = "MANAGER" | "USER";
 
 export interface CrmUserRow {
@@ -198,6 +199,7 @@ function CategoryRoleFields({
         <Select id="category" name="category" value={category} onChange={(e) => setCategory(e.target.value as Category)}>
           <option value="OUVRIER">Ouvrier</option>
           <option value="SECRETAIRE">Secrétaire</option>
+          <option value="COMPTABLE">Comptable</option>
         </Select>
       </div>
       <div>

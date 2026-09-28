@@ -3,6 +3,10 @@ import { Permission, CrmRole, AccessCategory } from "@prisma/client";
 
 export { Permission, CrmRole, AccessCategory };
 
+// Voir src/lib/access-categories.ts : le helper vit côté partagé car la
+// barre de navigation, composant client, ne peut pas importer ce module.
+export { isTransverseCategory } from "@/lib/access-categories";
+
 export interface AccessLike {
   role: CrmRole;
   category: AccessCategory;
@@ -13,7 +17,7 @@ export interface AccessLike {
  * Permissions effectives d'un accès.
  *
  * Depuis le retrait du volet commercial, il ne reste que deux catégories,
- * OUVRIER et SECRETAIRE, et aucune des deux n'hérite de permission par
+ * OUVRIER, SECRETAIRE et COMPTABLE, et aucune n'hérite de permission par
  * défaut : leur accès passe par des contrôles de catégorie explicites
  * (`canManageOperations`, `requireOperationsCategory` dans
  * src/server/tenant.ts), jamais par une Permission. Les permissions ne
@@ -37,3 +41,4 @@ export function effectivePermissions(access: AccessLike): Set<Permission> {
 export function hasPermission(access: AccessLike, permission: Permission): boolean {
   return effectivePermissions(access).has(permission);
 }
+
