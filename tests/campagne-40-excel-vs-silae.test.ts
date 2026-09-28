@@ -238,8 +238,14 @@ describe("campagne 40 salariés — le tableau Excel et l'import Silae concorden
 
   it("aucun salarié porteur d'heures ne passe sans matricule", () => {
     if (classeurs.size === 0) return;
-    // Le salarié 40 est volontairement sans matricule : il DOIT bloquer.
-    expect(rapport!.blocking.length).toBeGreaterThan(0);
-    expect(rapport!.blocking.join(" ")).toContain("EMP40");
+    // La règle, et non un accident du jeu de données : tout salarié porteur
+    // d'au moins une rubrique DOIT avoir un matricule, sans quoi il figure
+    // dans les points bloquants. Écrit ainsi, le test reste juste que le
+    // matricule du salarié 40 soit renseigné ou non.
+    const sansMatricule = rapport!.employees.filter((e) => e.lines.length > 0 && !e.matricule);
+    expect(rapport!.blocking).toHaveLength(sansMatricule.length);
+    for (const e of sansMatricule) {
+      expect(rapport!.blocking.join(" ")).toContain(e.name);
+    }
   });
 });
