@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { purgeOldLoginAttempts } from "@/server/auth/rate-limit";
 import { purgeOldRateLimitHits } from "@/lib/rate-limit";
+import { purgeOldActivityLogs } from "@/server/activity";
 
 /**
  * Compare deux chaînes en temps constant (indépendant du nombre de
@@ -56,12 +57,13 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 async function runPurge(): Promise<NextResponse> {
-  const [purgedLoginAttempts, purgedRateLimitHits] = await Promise.all([
+  const [purgedLoginAttempts, purgedRateLimitHits, purgedActivityLogs] = await Promise.all([
     purgeOldLoginAttempts(),
     purgeOldRateLimitHits(),
+    purgeOldActivityLogs(),
   ]);
 
-  return NextResponse.json({ ok: true, purgedLoginAttempts, purgedRateLimitHits });
+  return NextResponse.json({ ok: true, purgedLoginAttempts, purgedRateLimitHits, purgedActivityLogs });
 }
 
 // Même message qu'un secret invalide, y compris quand CRON_SECRET est absent

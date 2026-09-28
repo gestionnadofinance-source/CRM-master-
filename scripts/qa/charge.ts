@@ -46,7 +46,9 @@ async function runLevel(url: string, cookie: string, concurrence: number, second
         // Le second argument porte soit un cookie de session, soit une clé
         // API (« Bearer ... ») : les deux chemins d'authentification de
         // l'application doivent pouvoir être mesurés.
-        const headers = cookie.startsWith("Bearer ") ? { authorization: cookie } : { cookie };
+        const headers: Record<string, string> = cookie.startsWith("Bearer ")
+          ? { authorization: cookie }
+          : { cookie };
         const res = await fetch(url, { headers, redirect: "manual" });
         await res.arrayBuffer();
         const code = String(res.status);

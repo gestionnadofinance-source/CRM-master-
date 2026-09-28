@@ -330,6 +330,10 @@ model ActivityLog {
   @@index([crmId, createdAt])
   @@index([crmId, entityType, entityId])
   @@index([userId])
+  // La purge quotidienne filtre sur la seule date (voir purgeOldActivityLogs
+  // dans src/server/activity.ts) : sans cet index, elle parcourt toute la
+  // table, qui est la plus volumineuse de la base.
+  @@index([createdAt])
 }
 
 // ============================================================================
