@@ -65,7 +65,6 @@ export interface EmployeeAggregation {
 
 const MAX_REASONABLE_WEEKLY_HOURS = 60;
 
-const isoOf = (d: Date) => d.toISOString().slice(0, 10);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const dayHours = (d: PointageDay) => (d.normal || 0) + (d.matin || 0) + (d.apresMidi || 0) + (d.nuit || 0);
 

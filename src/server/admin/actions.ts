@@ -11,7 +11,7 @@ import { sendEmail, baseEmailLayout } from "@/lib/email";
 import { getServerEnv } from "@/lib/env";
 import { logActivity } from "@/server/activity";
 import { computeAccessDiff } from "@/server/admin/access-diff";
-import { MAX_CODE, MAX_ID, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
+import { MAX_CODE, MAX_ID, MAX_SHORT, tooLong } from "@/lib/validation";
 
 async function requireGlobalAdmin() {
   const ctx = await requireAuth();
