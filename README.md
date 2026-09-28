@@ -27,6 +27,7 @@ isolés l'un de l'autre (voir [Architecture multi-espaces](#architecture-multi-e
 - [Emails](#emails)
 - [API pour intégrations externes](#api-pour-intégrations-externes)
 - [Données personnelles (RGPD)](#données-personnelles-rgpd)
+- [Import Silae](docs/import-silae.md)
 - [Tests](#tests)
 - [Déploiement](#déploiement)
 - [Maintenance](#maintenance)
@@ -449,6 +450,34 @@ suivent une procédure distincte, ci-dessous.
    anonymisation manuelle des champs restants.
 3. Journaliser l'opération (qui, quand, pourquoi) en dehors de
    `ActivityLog` si celui-ci doit lui-même être couvert par la demande.
+
+## Import Silae
+
+Export mensuel des éléments variables de paie au format d'import standard
+Silae (« importsilae »), en complément — et non en remplacement — de
+l'export Excel de la Comptabilité.
+
+Le mode d'emploi destiné aux gestionnaires est dans
+[docs/import-silae.md](docs/import-silae.md). Côté code, tout vit sous
+`src/server/silae/` : catalogue des rubriques (source unique du paramétrage
+et de l'agrégation), calendrier des jours fériés, répartition des heures
+supplémentaires, agrégation mensuelle, rapport de contrôle et écriture CSV.
+
+Deux règles y sont structurantes et ne doivent pas être contournées :
+
+1. **Tout est recalculé depuis les pointages journaliers**, jamais depuis un
+   total saisi ailleurs. Les montants journaliers passent par
+   `computePointageTotals` puis un prorata, jamais par une recopie de ses
+   formules — sans quoi l'export pourrait diverger de ce qu'affiche l'écran.
+2. **Une semaine à cheval sur deux mois** répartit son journalier jour par
+   jour, et rattache ses forfaits hebdomadaires et ses heures
+   supplémentaires au mois majoritaire (à égalité, le plus ancien).
+
+Le format est imposé par Silae et toute erreur y est **silencieuse** : un
+code inconnu n'y provoque aucun message, la valeur est ignorée. D'où le
+rapport de contrôle obligatoire avant génération, et la couverture de tests
+sur la forme du fichier (décimale virgule, addition des doublons de clé,
+rejet des valeurs nulles, encodage Windows-1252).
 
 ## Tests
 

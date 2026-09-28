@@ -27,6 +27,7 @@ const SECRETAIRE_ALLOWED_PREFIXES = [
   "/activity",
   "/users",
   "/comptabilite",
+  "/silae",
 ];
 
 export default async function CrmLayout({

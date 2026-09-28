@@ -7,6 +7,7 @@ import {
   ClipboardList,
   ClipboardCheck,
   Calculator,
+  FileSpreadsheet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -46,6 +47,7 @@ export const CRM_NAV_ITEMS: NavItem[] = [
   { label: "Pointage client", href: (s) => `/c/${s}/pointage-client`, icon: ClipboardCheck, visibleTo: ["ADMIN", "SECRETAIRE", "OUVRIER"], foremanOnly: true },
   { label: "Coffre-fort", href: (s) => `/c/${s}/vault`, icon: Lock, visibleTo: ["ADMIN", "SECRETAIRE", "OUVRIER"] },
   { label: "Comptabilité", href: (s) => `/c/${s}/comptabilite`, icon: Calculator, visibleTo: ["ADMIN", "SECRETAIRE"] },
+  { label: "Import Silae", href: (s) => `/c/${s}/silae`, icon: FileSpreadsheet, visibleTo: ["ADMIN", "SECRETAIRE"] },
   { label: "Utilisateurs", href: (s) => `/c/${s}/users`, icon: UserCog, visibleTo: ["ADMIN", "SECRETAIRE"] },
   { label: "Activité", href: (s) => `/c/${s}/activity`, icon: History, visibleTo: ["ADMIN", "SECRETAIRE"] },
   { label: "Paramètres", href: (s) => `/c/${s}/settings`, icon: Settings, visibleTo: ["ADMIN"] },

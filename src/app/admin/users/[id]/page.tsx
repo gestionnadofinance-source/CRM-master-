@@ -31,6 +31,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
     defaultHourlyRate: Number(a.defaultHourlyRate),
     defaultHousingAllowance: Number(a.defaultHousingAllowance),
     defaultDirtAllowance: Number(a.defaultDirtAllowance),
+    silaeMatricule: a.silaeMatricule,
   }));
 
   return (

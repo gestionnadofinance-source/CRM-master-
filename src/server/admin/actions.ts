@@ -47,6 +47,14 @@ const accessEntrySchema = z.object({
   // par salarié — voir ChantierFixedAmounts — donc absentes ici.)
   defaultHousingAllowance: z.coerce.number().min(0).max(10000).default(0),
   defaultDirtAllowance: z.coerce.number().min(0).max(10000).default(5),
+  /// Matricule du salarié dans le dossier Silae de cet espace — requis par
+  /// l'export « Import Silae », voir src/server/silae.
+  silaeMatricule: z
+    .string()
+    .trim()
+    .max(MAX_CODE, tooLong(MAX_CODE))
+    .regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE)
+    .default(""),
 });
 
 const createUserSchema = z.object({
@@ -82,6 +90,7 @@ function parseAccessFromForm(formData: FormData) {
       defaultHourlyRate: formData.get(`hourlyRate-${crmId}`) ?? undefined,
       defaultHousingAllowance: formData.get(`housing-${crmId}`) ?? undefined,
       defaultDirtAllowance: formData.get(`dirt-${crmId}`) ?? undefined,
+      silaeMatricule: formData.get(`silae-${crmId}`) ?? undefined,
     };
   });
 }
@@ -136,6 +145,7 @@ export async function createUser(formData: FormData): Promise<CreateUserResult> 
           defaultHourlyRate: a.defaultHourlyRate,
           defaultHousingAllowance: a.defaultHousingAllowance,
           defaultDirtAllowance: a.defaultDirtAllowance,
+          silaeMatricule: a.silaeMatricule || null,
           grantedById: ctx.user.id,
         })),
       });
@@ -225,6 +235,7 @@ export async function updateUserAccess(userId: string, formData: FormData): Prom
           defaultHourlyRate: a.defaultHourlyRate,
           defaultHousingAllowance: a.defaultHousingAllowance,
           defaultDirtAllowance: a.defaultDirtAllowance,
+          silaeMatricule: a.silaeMatricule || null,
           grantedById: ctx.user.id,
         })),
       });
@@ -239,6 +250,7 @@ export async function updateUserAccess(userId: string, formData: FormData): Prom
           defaultHourlyRate: a.defaultHourlyRate,
           defaultHousingAllowance: a.defaultHousingAllowance,
           defaultDirtAllowance: a.defaultDirtAllowance,
+          silaeMatricule: a.silaeMatricule || null,
           grantedById: ctx.user.id,
         },
       });

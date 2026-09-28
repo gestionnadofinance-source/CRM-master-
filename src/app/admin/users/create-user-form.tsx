@@ -214,6 +214,18 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
                               </Label>
                               <Input id={`dirt-${crm.id}`} name={`dirt-${crm.id}`} type="number" min={0} step={0.5} defaultValue={5} className="h-8" />
                             </div>
+                            <div>
+                              <Label htmlFor={`silae-${crm.id}`} className="text-[11px]">
+                                Matricule Silae
+                              </Label>
+                              <Input
+                                id={`silae-${crm.id}`}
+                                name={`silae-${crm.id}`}
+                                defaultValue={""}
+                                placeholder="00012"
+                                className="h-8"
+                              />
+                            </div>
                           </div>
                         </div>
                       )}

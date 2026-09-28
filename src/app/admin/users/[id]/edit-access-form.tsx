@@ -34,6 +34,7 @@ export function EditAccessForm({
     defaultHourlyRate: number;
     defaultHousingAllowance: number;
     defaultDirtAllowance: number;
+    silaeMatricule: string | null;
   }[];
   isSelf: boolean;
 }) {
@@ -223,6 +224,18 @@ export function EditAccessForm({
                                     min={0}
                                     step={0.5}
                                     defaultValue={existing?.defaultDirtAllowance ?? 5}
+                                    className="h-8"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`silae-${crm.id}`} className="text-[11px]">
+                                    Matricule Silae
+                                  </Label>
+                                  <Input
+                                    id={`silae-${crm.id}`}
+                                    name={`silae-${crm.id}`}
+                                    defaultValue={existing?.silaeMatricule ?? ""}
+                                    placeholder="00012"
                                     className="h-8"
                                   />
                                 </div>
