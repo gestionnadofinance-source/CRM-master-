@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, History, CalendarRange, Lock, KeyRound, Calculator } from "lucide-react";
+import { LayoutDashboard, Users, History, CalendarRange, Lock, KeyRound, Calculator, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ADMIN_NAV = [
@@ -11,6 +11,7 @@ const ADMIN_NAV = [
   { label: "Planning", href: "/admin/planning", icon: CalendarRange },
   { label: "Coffres-forts", href: "/admin/vault", icon: Lock },
   { label: "Comptabilité", href: "/admin/comptabilite", icon: Calculator },
+  { label: "Import Silae", href: "/admin/silae", icon: FileSpreadsheet },
   { label: "Clés API", href: "/admin/api-keys", icon: KeyRound },
   { label: "Journal d'activité", href: "/admin/activity", icon: History },
 ];
