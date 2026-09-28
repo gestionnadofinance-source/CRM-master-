@@ -1,7 +1,6 @@
 /**
- * Initialisation minimale de CRM Master : les 5 CRM prévus par le cahier
- * des charges, leur configuration de base, et le premier administrateur
- * global.
+ * Initialisation minimale : les deux entités exploitées, leur configuration
+ * de base, et le premier administrateur global.
  *
  * Usage : npm run seed
  * Variables optionnelles : ADMIN_EMAIL, ADMIN_FIRST_NAME, ADMIN_LAST_NAME, ADMIN_PASSWORD
@@ -44,9 +43,6 @@ function normalizeEmail(email: string): string {
 const CRMS: { name: string; slug: string; color: string; description: string }[] = [
   { name: "Fidem Froid Clim", slug: "fidem-froid-clim", color: "#2563eb", description: "Installation et dépannage froid & climatisation" },
   { name: "Fidem Maintenance", slug: "fidem-maintenance", color: "#0891b2", description: "Contrats de maintenance technique" },
-  { name: "Fitness Park Modge", slug: "fitness-park-modge", color: "#dc2626", description: "Club de sport" },
-  { name: "Association", slug: "association", color: "#7c3aed", description: "Gestion associative" },
-  { name: "Société de Communication", slug: "societe-communication", color: "#d97706", description: "Agence de communication" },
 ];
 
 async function main() {

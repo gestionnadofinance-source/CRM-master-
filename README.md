@@ -8,10 +8,8 @@ Fonctions centrales : **planning des chantiers**, **pointage salariés et
 client**, **coffre-fort de documents personnels**, **exports comptables
 Excel** et **ordres de mission**.
 
-Espaces préconfigurés : **Fidem Froid Clim**, **Fidem Maintenance**,
-**Fitness Park Modge**, **Association**, **Société de Communication** —
-renommables depuis l'administration, et un administrateur peut en ajouter
-d'autres sans écrire de code (voir [Architecture multi-espaces](#architecture-multi-espaces)).
+Deux espaces : **Fidem Froid Clim** et **Fidem Maintenance**, strictement
+isolés l'un de l'autre (voir [Architecture multi-espaces](#architecture-multi-espaces)).
 
 ## Sommaire
 
@@ -85,18 +83,15 @@ tests/                    tests automatisés (Vitest)
 
 Chaque espace est fonctionnellement indépendant (chantiers, affectations,
 pointages, coffre-fort, documents, notifications, journal d'activité — voir
-la liste complète dans `prisma/schema.prisma`).
+la liste complète dans `prisma/schema.prisma`). L'isolation est garantie au
+niveau du schéma, de l'application et des tests (voir
+[Isolation des espaces](#isolation-des-espaces--garanties-et-tests)).
 
-**Ajouter un espace ne nécessite aucune modification de code.** Depuis
-`/admin/crms`, un administrateur global crée un espace ; le serveur exécute
-`provisionCrm()` (`src/server/admin/provision-crm.ts`) qui, dans une seule
-transaction, crée l'espace et les informations de l'entreprise
-(`CompanySettings`, qui alimentent notamment les mentions légales de
-l'ordre de mission).
-
-Le nouvel espace bénéficie immédiatement de tous les modules (utilisateurs,
-permissions, planning, pointage, coffre-fort, comptabilité, journal
-d'activité) sans duplication manuelle.
+Les espaces sont définis dans `prisma/seed.ts` et créés au déploiement.
+Il n'y a plus d'écran d'administration des espaces : l'ERP en sert deux,
+Fidem Froid Clim et Fidem Maintenance. En ajouter un passe par une entrée
+dans `CRMS` (`prisma/seed.ts`) et un déploiement ; en renommer un passe par
+une migration ou une mise à jour directe en base.
 
 ## Installation
 
@@ -108,7 +103,7 @@ cp .env.example .env
 # renseigner DATABASE_URL au minimum — voir la section suivante
 
 npx prisma migrate deploy   # applique les migrations existantes
-npm run seed                 # crée les 5 espaces + le premier administrateur
+npm run seed                 # crée les 2 espaces + le premier administrateur
 
 npm run dev                  # http://localhost:3000
 ```
@@ -158,8 +153,8 @@ complément — jamais en remplacement — du contrôle applicatif.
 npm run seed
 ```
 
-Crée les 5 CRM initiaux (préconfigurés : pipeline, sources, taux de TVA,
-réservation) et un administrateur global. Variables optionnelles :
+Crée les 2 espaces (Fidem Froid Clim, Fidem Maintenance) et un
+administrateur global. Variables optionnelles :
 `ADMIN_EMAIL`, `ADMIN_FIRST_NAME`, `ADMIN_LAST_NAME`, `ADMIN_PASSWORD`
 (valeurs par défaut : `admin@crm-master.local` / `ChangeMoi123!`).
 
@@ -498,8 +493,9 @@ npm start                 # ou déploiement sur la plateforme cible
 
 ## Maintenance
 
-- **Ajouter un espace** : `/admin/crms` → « Ajouter un CRM » (aucune
-  intervention technique nécessaire, voir [Architecture multi-espaces](#architecture-multi-espaces)).
+- **Ajouter ou renommer un espace** : via `prisma/seed.ts` puis un
+  déploiement (voir [Architecture multi-espaces](#architecture-multi-espaces)).
+  Il n'existe plus d'écran d'administration des espaces.
 - **Désactiver un utilisateur** : `/admin/users` → conserve son
   historique ; ses sessions actives sont immédiatement révoquées.
 - **Purger l'historique d'un utilisateur** : fonction dédiée dans

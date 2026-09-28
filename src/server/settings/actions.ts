@@ -10,7 +10,7 @@ import { logActivity } from "@/server/activity";
 import { publishToCrm } from "@/lib/realtime";
 
 import { isPubliclySafeHttpsUrl } from "@/lib/url-safety";
-import { MAX_CODE, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS, MAX_INT4, outOfRange } from "@/lib/validation";
+import { MAX_CODE, MAX_LONG, MAX_SHORT, MAX_TEXT, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 
 export interface ActionResult {
   ok: boolean;

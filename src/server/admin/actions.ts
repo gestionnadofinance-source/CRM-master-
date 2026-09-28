@@ -10,8 +10,6 @@ import { passwordSchema, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/v
 import { sendEmail, baseEmailLayout } from "@/lib/email";
 import { getServerEnv } from "@/lib/env";
 import { logActivity } from "@/server/activity";
-import { provisionCrm } from "@/server/admin/provision-crm";
-import { publishToCrm } from "@/lib/realtime";
 import { computeAccessDiff } from "@/server/admin/access-diff";
 import { MAX_CODE, MAX_ID, MAX_SHORT, MAX_TEXT, tooLong } from "@/lib/validation";
 
@@ -404,99 +402,7 @@ export async function deleteUserActivityHistory(userId: string, confirmEmail: st
 // CRM
 // ---------------------------------------------------------------------------
 
-const createCrmSchema = z.object({
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
-  slug: z.string().trim().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(),
-  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
-  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(),
-});
 
-export interface CreateCrmResult extends ActionResult {
-  crmId?: string;
-  crmSlug?: string;
-}
 
-export async function createCrm(formData: FormData): Promise<CreateCrmResult> {
-  const ctx = await requireGlobalAdmin();
-  const raw = {
-    name: String(formData.get("name") ?? "").trim(),
-    slug: String(formData.get("slug") ?? "").trim() || undefined,
-    color: String(formData.get("color") ?? "#3b6bf5"),
-    description: String(formData.get("description") ?? "").trim() || undefined,
-  };
-  const parsed = createCrmSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
-  }
 
-  const crm = await provisionCrm(parsed.data);
 
-  await logActivity({
-    crmId: null,
-    userId: ctx.user.id,
-    action: "crm.created",
-    entityType: "Crm",
-    entityId: crm.id,
-    newValue: { name: crm.name, slug: crm.slug },
-  });
-
-  revalidatePath("/admin/crms");
-  revalidatePath("/", "layout");
-  return { ok: true, crmId: crm.id, crmSlug: crm.slug };
-}
-
-const updateCrmSchema = z.object({
-  name: z.string().trim().max(MAX_SHORT, tooLong(MAX_SHORT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1, "Le nom est obligatoire."),
-  description: z.string().trim().max(MAX_TEXT, tooLong(MAX_TEXT)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional(),
-  color: z.string().trim().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
-  isActive: z.boolean(),
-});
-
-/** Modifie un CRM existant. Le slug est volontairement immuable après création : toutes les URLs en dépendent. */
-export async function updateCrm(crmId: string, formData: FormData): Promise<ActionResult> {
-  const ctx = await requireGlobalAdmin();
-  const existing = await prisma.crm.findUnique({ where: { id: crmId } });
-  if (!existing) return { ok: false, error: "CRM introuvable." };
-
-  const raw = {
-    name: String(formData.get("name") ?? "").trim(),
-    description: String(formData.get("description") ?? "").trim() || undefined,
-    color: String(formData.get("color") ?? "#3b6bf5"),
-    isActive: formData.get("isActive") === "on",
-  };
-  const parsed = updateCrmSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
-  }
-  const input = parsed.data;
-
-  await prisma.crm.update({
-    where: { id: crmId },
-    data: { name: input.name, description: input.description ?? null, color: input.color, isActive: input.isActive },
-  });
-
-  await logActivity({
-    crmId: null,
-    userId: ctx.user.id,
-    action: "crm.updated",
-    entityType: "Crm",
-    entityId: crmId,
-    oldValue: { name: existing.name, description: existing.description, color: existing.color, isActive: existing.isActive },
-    newValue: input,
-  });
-
-  // Le nom du CRM n'est jamais mis en cache : les Server Components (topbar,
-  // sidebar) le relisent en base à chaque navigation via requireCrmAccessBySlug.
-  // revalidatePath force en plus l'invalidation du cache de rendu Next.js pour
-  // que le nouveau nom apparaisse dès la prochaine requête, sans attendre une
-  // expiration de cache quelconque.
-  revalidatePath("/", "layout");
-  revalidatePath("/admin/crms");
-  revalidatePath(`/admin/crms/${crmId}`);
-
-  // Signal best-effort pour les sessions déjà ouvertes avec Pusher configuré ;
-  // n'a aucun effet si le temps réel n'est pas configuré (voir lib/realtime.ts).
-  await publishToCrm(crmId, "presence.updated", { reason: "crm.renamed" });
-
-  return { ok: true };
-}

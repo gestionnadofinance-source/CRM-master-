@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Building2, History, CalendarRange, Lock, KeyRound, Calculator } from "lucide-react";
+import { LayoutDashboard, Users, History, CalendarRange, Lock, KeyRound, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ADMIN_NAV = [
   { label: "Tableau de bord", href: "/admin", icon: LayoutDashboard },
   { label: "Utilisateurs", href: "/admin/users", icon: Users },
-  { label: "CRM", href: "/admin/crms", icon: Building2 },
   { label: "Planning", href: "/admin/planning", icon: CalendarRange },
   { label: "Coffres-forts", href: "/admin/vault", icon: Lock },
   { label: "Comptabilité", href: "/admin/comptabilite", icon: Calculator },
