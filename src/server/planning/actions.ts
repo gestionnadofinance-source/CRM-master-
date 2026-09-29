@@ -148,6 +148,18 @@ export async function assignToChantier(crmId: string, chantierId: string, formDa
   });
   if (!member) return { ok: false, error: "Cette personne n'a pas accès à ce CRM." };
 
+  // État avant écriture : sert à décider si l'ordre de mission doit être
+  // régénéré. L'ordre de mission ne reprend que les données pertinentes
+  // (adresse, kilomètres, durées, dates) — pas la note ni les frais SNCF /
+  // retenue de chambre, qui ne figurent pas sur le PDF.
+  const avant = await prisma.chantierAssignment.findUnique({
+    where: { chantierId_userId: { chantierId, userId: parsed.data.userId } },
+    select: {
+      startDate: true, endDate: true, workerAddress: true,
+      kmRate: true, distanceKm: true, travelHourlyRate: true, travelDurationHours: true,
+    },
+  });
+
   await prisma.chantierAssignment.upsert({
     where: { chantierId_userId: { chantierId, userId: parsed.data.userId } },
     create: {
@@ -178,15 +190,31 @@ export async function assignToChantier(crmId: string, chantierId: string, formDa
     },
   });
 
-  // L'ordre de mission suit l'affectation, automatiquement : il était
-  // jusqu'ici derrière un bouton à cliquer salarié par salarié, et un ouvrier
-  // affecté sans que personne y pense n'en recevait jamais. Best-effort : le
-  // rendu d'un PDF ne doit pas faire échouer l'affectation elle-même.
-  try {
-    const depot = await depositMissionOrderCore(tenant, ctx.user.id, chantierId, chantier.name, parsed.data.userId);
-    if (!depot.ok) console.warn(`[planning] ordre de mission non déposé : ${depot.error}`);
-  } catch (err) {
-    console.error("[planning] échec du dépôt de l'ordre de mission", err);
+  // L'ordre de mission suit l'affectation, automatiquement : il était jusqu'ici
+  // derrière un bouton à cliquer salarié par salarié, et un ouvrier affecté
+  // sans que personne y pense n'en recevait jamais. On ne le régénère qu'à la
+  // CRÉATION ou quand une donnée reprise sur le PDF a changé : sans cela,
+  // renommer une note re-rendait un PDF et re-notifiait le salarié pour rien.
+  const num = (v: unknown) => (v == null ? null : Number(v));
+  const date = (v: Date | null | undefined) => (v ? v.getTime() : null);
+  const missionAChange =
+    !avant ||
+    date(avant.startDate) !== date(parsed.data.startDate) ||
+    date(avant.endDate) !== date(parsed.data.endDate) ||
+    (avant.workerAddress ?? null) !== (parsed.data.workerAddress || null) ||
+    num(avant.kmRate) !== (parsed.data.kmRate ?? null) ||
+    num(avant.distanceKm) !== (parsed.data.distanceKm ?? null) ||
+    num(avant.travelHourlyRate) !== (parsed.data.travelHourlyRate ?? null) ||
+    num(avant.travelDurationHours) !== (parsed.data.travelDurationHours ?? null);
+
+  if (missionAChange) {
+    // Best-effort : le rendu d'un PDF ne doit pas faire échouer l'affectation.
+    try {
+      const depot = await depositMissionOrderCore(tenant, ctx.user.id, chantierId, chantier.name, parsed.data.userId);
+      if (!depot.ok) console.warn(`[planning] ordre de mission non déposé : ${depot.error}`);
+    } catch (err) {
+      console.error("[planning] échec du dépôt de l'ordre de mission", err);
+    }
   }
 
   await logActivity({

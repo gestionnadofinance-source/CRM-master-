@@ -17,8 +17,9 @@ import { isFrenchHoliday } from "@/server/silae/holidays";
  *
  * Colonnes volontairement laissées VIERGES pour saisie manuelle par la
  * secrétaire (aucune donnée source fiable dans le CRM) : compteur 8h (F),
- * la colonne "0.5" (G), férié (J), grand déplacement (P), la colonne "80"
- * (Q), voyage (X), compteur (Z), chômés (AA), et tout le bloc note de frais.
+ * la colonne "0.5" (G), compteur (Z), chômés (AA), et tout le bloc note de
+ * frais. Les colonnes férié (J), grand déplacement (P/Q) et voyage (X) sont
+ * désormais renseignées automatiquement à partir du pointage.
  */
 
 export interface AccountingDay {
@@ -143,6 +144,17 @@ function round2(n: number): number {
  * La règle de rattachement est la même que celle de l'export Silae
  * (owningMonth), pour que les deux fichiers racontent la même chose.
  */
+function weekOwningMonth(days: AccountingDay[]): string | null {
+  const counts = new Map<string, number>();
+  for (const d of days) {
+    if (dayHours(d) <= 0 && (d.nuit || 0) <= 0) continue;
+    const key = d.date.slice(0, 7);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]![0];
+}
+
 function payrollMonthOf(weeks: AccountingWeekInput[]): string {
   const counts = new Map<string, number>();
   for (const w of weeks) {
@@ -276,10 +288,15 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
     weekLabelCell.border = THIN_BORDER;
 
     const derniereLigne = weekFirstRow + joursDuMois.length - 1;
-    ws.mergeCells(weekFirstRow, FIRST_DATA_COL, derniereLigne, FIRST_DATA_COL);
+    // Ne fusionner que sur au moins deux lignes : une fusion 1×1 (mois qui
+    // commence ou finit sur une semaine d'un seul jour) est écrite
+    // <mergeCell ref="D6:D6"/>, qu'Excel considère comme un fichier corrompu.
+    if (derniereLigne > weekFirstRow) {
+      ws.mergeCells(weekFirstRow, FIRST_DATA_COL, derniereLigne, FIRST_DATA_COL);
+      ws.mergeCells(weekFirstRow, 6, derniereLigne, 6); // compteur 8h — vierge
+      ws.mergeCells(weekFirstRow, 7, derniereLigne, 7); // colonne "0.5" — vierge
+    }
     ws.getCell(weekFirstRow, FIRST_DATA_COL).value = input.chantierName;
-    ws.mergeCells(weekFirstRow, 6, derniereLigne, 6); // compteur 8h — vierge, saisie manuelle
-    ws.mergeCells(weekFirstRow, 7, derniereLigne, 7); // colonne "0.5" — vierge, saisie manuelle
 
     let firstWorkedRowThisWeek: number | null = null;
 
@@ -330,15 +347,21 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
     });
 
     // Éléments forfaitaires de la SEMAINE : posés une seule fois (premier
-    // jour travaillé) — la formule SUM du sous-total les totalise
-    // correctement sans avoir à les répartir sur chaque jour.
+    // jour travaillé), et UNIQUEMENT si cette semaine est rattachée au mois
+    // du classeur. Une semaine à cheval est rattachée au mois qui porte la
+    // majorité de ses jours travaillés — exactement la règle owningMonth de
+    // l'export Silae, pour que les deux fichiers imputent le forfait au même
+    // mois. Sinon un forfait apparaîtrait dans ce classeur alors que Silae le
+    // compte sur l'autre mois.
     const anchor = firstWorkedRowThisWeek ?? row;
-    if (week.housingAllowance > 0) ws.getCell(anchor, 18).value = round2(week.housingAllowance); // R logement
-    if (week.managementBonus > 0) ws.getCell(anchor, 19).value = round2(week.managementBonus); // S management
-    // Habillage : un NOMBRE, comme les repas, et non un montant.
-    if (week.clothingBonus > 0) ws.getCell(anchor, 20).value = 1; // T prime habillage
-    if (week.gdDepl53Count > 0) ws.getCell(anchor, 16).value = week.gdDepl53Count; // P gd depl 53
-    if (week.gdDepl80Count > 0) ws.getCell(anchor, 17).value = week.gdDepl80Count; // Q 80
+    if (weekOwningMonth(week.days) === moisDePaie) {
+      if (week.housingAllowance > 0) ws.getCell(anchor, 18).value = round2(week.housingAllowance); // R logement
+      if (week.managementBonus > 0) ws.getCell(anchor, 19).value = round2(week.managementBonus); // S management
+      // Habillage : un NOMBRE, comme les repas, et non un montant.
+      if (week.clothingBonus > 0) ws.getCell(anchor, 20).value = 1; // T prime habillage
+      if (week.gdDepl53Count > 0) ws.getCell(anchor, 16).value = week.gdDepl53Count; // P gd depl 53
+      if (week.gdDepl80Count > 0) ws.getCell(anchor, 17).value = week.gdDepl80Count; // Q 80
+    }
 
     row += joursDuMois.length;
     writeSumRow(ws, row, weekFirstRow, row - 1, "sous total");

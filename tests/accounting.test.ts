@@ -323,3 +323,65 @@ describe("conformité au classeur de référence", () => {
   });
 });
 
+describe("robustesse du découpage mensuel", () => {
+  it("une semaine d'un seul jour dans le mois ne produit pas de fusion corrompue", async () => {
+    // Août 2026 : le 31 est un lundi, seul jour d'août de sa semaine. Une
+    // fusion 1×1 (D31:D31) rendrait le fichier « à réparer » pour Excel.
+    const days = emptyWeekDays("2026-08-31"); // lundi 31 août → dimanche 6 sept
+    days[0]!.normal = 7; // seul le lundi 31 est en août
+    const buffer = await buildAccountingWorkbook({
+      employeeName: "Jean Ouvrier",
+      chantierName: "Chantier Test",
+      weeks: [{ ...BASE_WEEK, isoWeek: 36, days }],
+      sncfExpense: 0,
+      roomDeduction: 0,
+    });
+    const ws = await readBack(buffer);
+    // Une seule ligne de jour (le 31), puis le sous-total.
+    expect(ws.getCell(6, 3).value).toBe(31);
+    expect(String(ws.getCell(7, 2).value)).toContain("sous total");
+    // Aucune fusion dégénérée (début == fin) dans le classeur relu.
+    for (const m of ws.model.merges ?? []) {
+      const [tl, br] = String(m).split(":");
+      expect(tl, `fusion 1×1 détectée : ${m}`).not.toBe(br);
+    }
+  });
+
+  it("le forfait d'une semaine à cheval va au mois qui la possède, pas à l'autre", async () => {
+    // Un classeur d'AOÛT (majorité des jours en août) qui contient AUSSI la
+    // semaine lundi 27 juillet → dimanche 2 août. Cette semaine est possédée
+    // par juillet (5 jours contre 2) : ses jours d'août s'affichent, mais son
+    // forfait de management doit rester au classeur de juillet — exactement la
+    // règle owningMonth de l'export Silae, pour que les deux fichiers imputent
+    // le forfait au même mois.
+    const straddle = emptyWeekDays("2026-07-27");
+    for (const d of straddle) d.normal = 7;
+    const semAout = (lundi: string) => {
+      const d = emptyWeekDays(lundi);
+      for (const x of d) x.normal = 7;
+      return d;
+    };
+    const buffer = await buildAccountingWorkbook({
+      employeeName: "Jean Ouvrier",
+      chantierName: "Chantier Test",
+      weeks: [
+        { ...BASE_WEEK, isoWeek: 31, days: straddle, managementBonus: 100 },
+        { ...BASE_WEEK, isoWeek: 32, days: semAout("2026-08-03"), managementBonus: 100 },
+        { ...BASE_WEEK, isoWeek: 33, days: semAout("2026-08-10"), managementBonus: 100 },
+      ],
+      sncfExpense: 0,
+      roomDeduction: 0,
+    });
+    const ws = await readBack(buffer);
+    // La semaine à cheval n'apparaît que par ses 2 jours d'août (1er, 2).
+    expect(ws.getCell(6, 3).value).toBe(1);
+    expect(ws.getCell(7, 3).value).toBe(2);
+    // Son management (col S = 19) est SUPPRIMÉ : il va au classeur de juillet.
+    expect(ws.getCell(6, 19).value).toBeNull();
+    expect(ws.getCell(7, 19).value).toBeNull();
+    // La première semaine pleinement en août (bloc suivant) porte bien le sien.
+    // Bloc 1 : lignes 6-7 (2 jours) + sous-total 8. Bloc 2 démarre en 9.
+    expect(ws.getCell(9, 19).value).toBe(100);
+  });
+});
+
