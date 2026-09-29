@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { denyReadRequest, requireWriteAccess, readPagination } from "@/server/public-api/auth";
 import { jsonToFormData, actionResultResponse, withWriteErrorHandling } from "@/server/public-api/write-helpers";
-import { createChantier } from "@/server/planning/actions";
+import { createChantierCore } from "@/server/planning/core";
 
 export async function GET(request: NextRequest) {
   const refus = await denyReadRequest(request);
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     if (!body?.crmId) return NextResponse.json({ error: "crmId est obligatoire." }, { status: 400 });
 
-    const result = await createChantier(String(body.crmId), jsonToFormData(body), access.actor);
+    const result = await createChantierCore(access.actor, String(body.crmId), jsonToFormData(body));
     return actionResultResponse(result, 201);
   });
 }

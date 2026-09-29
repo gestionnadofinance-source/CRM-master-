@@ -134,7 +134,9 @@ export type WriteAccessResult =
  * nécessairement administrateur global (voir requireGlobalAdmin dans
  * src/server/admin/api-keys.ts) — afin que les routes appellent tel quel
  * le cœur métier des server actions existantes (createClient, saveQuote,
- * upsertPointageEntry, etc. via leur paramètre optionnel `actorCtx`)
+ * upsertPointageEntryCore, etc. via leur premier paramètre `ctx`,
+ * dans les modules server-only *core.ts qui ne sont jamais appelables
+ * depuis le navigateur)
  * plutôt que de dupliquer leurs règles et leurs effets de bord
  * (notifications, journal d'activité, mouvements de pipeline...).
  */

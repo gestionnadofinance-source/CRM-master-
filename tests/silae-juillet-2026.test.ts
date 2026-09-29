@@ -364,13 +364,15 @@ function sumDayColumn(ws: ExcelJS.Worksheet, weekCount: number, col: number): nu
   return Math.round(total * 100) / 100;
 }
 
+/**
+ * Colonnes que l'ERP laisse délibérément vides : aucune donnée du parcours
+ * chantier → ouvrier → pointage ne les alimente, et leur inventer une valeur
+ * serait pire que de les laisser à la main. J, P, Q et X n'en font plus
+ * partie — le CRM détenait ces données et ne les reportait pas.
+ */
 const MANUAL_COLUMNS: Array<[string, number]> = [
   ["F compteur 8h", 6],
   ["G 0.5", 7],
-  ["J férié", 10],
-  ["P gd depl 53", 16],
-  ["Q 80", 17],
-  ["X voyage", 24],
   ["Z compteur", 26],
   ["AA chômés", 27],
 ];
@@ -398,6 +400,9 @@ describe("juillet 2026 — le tableau Excel et l'import Silae concordent", () =>
     maskBonus: 0,
     zoneBonus: 0,
     kmPerDay: 0,
+    travelAllowance: 0,
+    gdDepl53Count: 0,
+    gdDepl80Count: 0,
   }));
 
   async function workbook(): Promise<ExcelJS.Worksheet> {
@@ -433,9 +438,10 @@ describe("juillet 2026 — le tableau Excel et l'import Silae concordent", () =>
     const ws = await workbook();
     const { totals } = aggregateEmployeeMonth(silaeWeeks, JUILLET.year, JUILLET.month);
 
-    // M « repas midi 20 » porte un MONTANT par jour travaillé ; Silae attend
-    // un NOMBRE de repas. Le rapprochement se fait par le montant unitaire.
-    expect(sumDayColumn(ws, excelWeeks.length, 13)).toBe(totals.repasMidi! * CHANTIER.lunchAllowance);
+    // M « repas midi 20 » compte des OCCURRENCES, comme Silae : le tarif est
+    // porté par l'intitulé de la colonne. Les deux fichiers écrivent donc le
+    // même nombre, sans conversion — c'est la convention du classeur Fidem.
+    expect(sumDayColumn(ws, excelWeeks.length, 13)).toBe(totals.repasMidi);
     expect(sumDayColumn(ws, excelWeeks.length, 19)).toBe(totals.primeManagement); // S management
     expect(sumDayColumn(ws, excelWeeks.length, 12)).toBe(totals.fraisSncf); // L frais SNCF
     expect(sumDayColumn(ws, excelWeeks.length, 23)).toBe(totals.retenueChambre); // W retenue de chambre
@@ -448,15 +454,14 @@ describe("juillet 2026 — le tableau Excel et l'import Silae concordent", () =>
     }
   });
 
-  it("le CRM calcule des heures fériées que le classeur n'a jamais portées", async () => {
-    // Semaine du 13 juillet : le 14 est férié. Le classeur laisse la colonne J
-    // vierge, l'import Silae porte la valeur — c'est un gain, pas un écart à
-    // corriger, mais il doit rester visible.
+  it("les heures fériées figurent maintenant dans le classeur, comme dans le modèle", async () => {
+    // Semaine du 13 juillet : le mardi 14 est férié. La colonne J restait
+    // vierge alors que le CRM calcule ces heures — elles étaient ressaisies à
+    // la main, ou perdues.
     const ws = await workbook();
-    const weeks13 = [week("2026-07-13", [7, 7, 7, 7, 7, null, null])];
-    const { totals } = aggregateEmployeeMonth(weeks13, JUILLET.year, JUILLET.month);
+    const { totals } = aggregateEmployeeMonth(silaeWeeks, JUILLET.year, JUILLET.month);
 
     expect(totals.heuresFerie).toBe(7);
-    expect(sumDayColumn(ws, excelWeeks.length, 10)).toBe(0); // J férié, vierge
+    expect(sumDayColumn(ws, excelWeeks.length, 10)).toBe(totals.heuresFerie);
   });
 });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { denyReadRequest, requireWriteAccess, readPagination } from "@/server/public-api/auth";
 import { jsonToFormData, actionResultResponse, withWriteErrorHandling } from "@/server/public-api/write-helpers";
-import { upsertPointageEntry } from "@/server/pointage/actions";
+import { upsertPointageEntryCore } from "@/server/pointage/core";
 
 export async function GET(request: NextRequest) {
   const refus = await denyReadRequest(request);
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     if (!body?.chantierId) return NextResponse.json({ error: "chantierId est obligatoire." }, { status: 400 });
 
     const formBody = { ...body, days: JSON.stringify(body.days ?? []) };
-    const result = await upsertPointageEntry(String(body.crmId), String(body.chantierId), jsonToFormData(formBody), access.actor);
+    const result = await upsertPointageEntryCore(access.actor, String(body.crmId), String(body.chantierId), jsonToFormData(formBody));
     // 201 seulement si la fiche vient d'être créée : cette route est un
     // upsert, et répondre 201 sur une mise à jour empêchait un client
     // d'apprendre ce qu'il avait réellement fait.

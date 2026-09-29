@@ -200,6 +200,12 @@ export async function generateAccountingExport(
     maskBonus: p.maskBonusApplied ? Number(chantier.maskBonus) : 0,
     zoneBonus: p.zoneBonusApplied ? Number(chantier.zoneBonus) : 0,
     kmPerDay: p.kmReimbursementApplied ? Number(assignment?.distanceKm ?? 0) * Number(assignment?.kmRate ?? 0) : 0,
+    // Indemnité de trajet et grands déplacements : le CRM les détenait déjà,
+    // mais ils n'étaient jamais reportés dans le classeur — colonnes X, P et
+    // Q laissées vides, donc ressaisies à la main ou perdues.
+    travelAllowance: p.travelAllowanceApplied ? Number(chantier.travelAllowance) : 0,
+    gdDepl53Count: p.gdDepl53Count,
+    gdDepl80Count: p.gdDepl80Count,
   }));
 
   const buffer = await buildAccountingWorkbook({

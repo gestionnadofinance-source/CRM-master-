@@ -20,8 +20,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined, revalidateTag: () => undefined }));
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/crypto";
-import { previewSilaeExport, generateSilaeExport } from "@/server/silae/actions";
-import { upsertPointageEntry } from "@/server/pointage/actions";
+import { previewSilaeExportCore, generateSilaeExportCore } from "@/server/silae/core";
+import { upsertPointageEntryCore } from "@/server/pointage/core";
 import type { AuthContext } from "@/server/auth/session";
 
 const SLUG = "__test__silae_juillet_2026";
@@ -169,7 +169,7 @@ afterAll(async () => {
 
 describe("juillet 2026, de la base au fichier", () => {
   it("retient les quatre salariés du mois, semaine à cheval comprise", async () => {
-    const { ok, report } = await previewSilaeExport(crmId, 2026, 7, { exportWorkedHours: true }, ctx);
+    const { ok, report } = await previewSilaeExportCore(ctx, crmId, 2026, 7, { exportWorkedHours: true });
     expect(ok).toBe(true);
     expect(report!.employees.map((e) => e.name).sort()).toEqual([
       "Test ALPHA",
@@ -180,7 +180,7 @@ describe("juillet 2026, de la base au fichier", () => {
   });
 
   it("ALPHA : 105 h, le 14 juillet férié, 15 repas, 300 € d'acompte", async () => {
-    const { report } = await previewSilaeExport(crmId, 2026, 7, { exportWorkedHours: true }, ctx);
+    const { report } = await previewSilaeExportCore(ctx, crmId, 2026, 7, { exportWorkedHours: true });
     const alpha = report!.employees.find((e) => e.name === "Test ALPHA")!;
     const value = (key: string) => alpha.lines.find((l) => l.rubrique === key)?.value;
 
@@ -193,7 +193,7 @@ describe("juillet 2026, de la base au fichier", () => {
   });
 
   it("BRAVO : la semaine à cheval ne verse que ses jours de juillet, mais toutes ses heures sup", async () => {
-    const { report } = await previewSilaeExport(crmId, 2026, 7, { exportWorkedHours: true }, ctx);
+    const { report } = await previewSilaeExportCore(ctx, crmId, 2026, 7, { exportWorkedHours: true });
     const bravo = report!.employees.find((e) => e.name === "Test BRAVO")!;
     const value = (key: string) => bravo.lines.find((l) => l.rubrique === key)?.value;
 
@@ -203,7 +203,7 @@ describe("juillet 2026, de la base au fichier", () => {
   });
 
   it("CHARLIE : les frais des DEUX chantiers s'additionnent", async () => {
-    const { report } = await previewSilaeExport(crmId, 2026, 7, {}, ctx);
+    const { report } = await previewSilaeExportCore(ctx, crmId, 2026, 7, {});
     const charlie = report!.employees.find((e) => e.name === "Test CHARLIE")!;
     const value = (key: string) => charlie.lines.find((l) => l.rubrique === key)?.value;
 
@@ -214,7 +214,7 @@ describe("juillet 2026, de la base au fichier", () => {
   it("nomme les absences du mois, qui ne passent pas par cet import", async () => {
     // Sans cette liste, un congé saisi dans le CRM disparaît de la paie sans
     // que personne ne s'en aperçoive : l'export des absences n'existe pas.
-    const { report } = await previewSilaeExport(crmId, 2026, 7, {}, ctx);
+    const { report } = await previewSilaeExportCore(ctx, crmId, 2026, 7, {});
     expect(report!.reminders).toContain("Test BRAVO : Congé payé, du 2026-07-06 au 2026-07-10 — 5 j.");
   });
 
@@ -236,12 +236,12 @@ describe("juillet 2026, de la base au fichier", () => {
     fd.set("gdDepl53Count", "3");
     fd.set("gdDepl80Count", "2");
 
-    const res = await upsertPointageEntry(crmId, chantier.id, fd, ctx);
+    const res = await upsertPointageEntryCore(ctx, crmId, chantier.id, fd);
     expect(res.ok).toBe(true);
     // La fiche existait déjà : c'est une mise à jour, pas une création.
     expect(res.created).toBe(false);
 
-    const { report } = await previewSilaeExport(crmId, 2026, 7, {}, ctx);
+    const { report } = await previewSilaeExportCore(ctx, crmId, 2026, 7, {});
     const alpha = report!.employees.find((e) => e.name === "Test ALPHA")!;
     const val = (cle: string) => alpha.lines.find((l) => l.rubrique === cle)?.value;
     expect(val("grandDeplacement53")).toBe(3);
@@ -252,12 +252,12 @@ describe("juillet 2026, de la base au fichier", () => {
   });
 
   it("DELTA sans matricule bloque la génération du fichier", async () => {
-    const preview = await previewSilaeExport(crmId, 2026, 7, {}, ctx);
+    const preview = await previewSilaeExportCore(ctx, crmId, 2026, 7, {});
     expect(preview.report!.blocking).toEqual([
       "Test DELTA a des éléments à exporter mais aucun matricule Silae.",
     ]);
 
-    const generated = await generateSilaeExport(crmId, 2026, 7, {}, ctx);
+    const generated = await generateSilaeExportCore(ctx, crmId, 2026, 7, {});
     expect(generated.ok).toBe(false);
     expect(generated.contentBase64).toBeUndefined();
   });
@@ -268,7 +268,7 @@ describe("juillet 2026, de la base au fichier", () => {
       data: { silaeMatricule: "1004" },
     });
 
-    const res = await generateSilaeExport(crmId, 2026, 7, { encoding: "win1252" }, ctx);
+    const res = await generateSilaeExportCore(ctx, crmId, 2026, 7, { encoding: "win1252" });
     expect(res.ok).toBe(true);
     expect(res.fileName).toBe("IMPORT_SILAE_TEST-SILAE-JUILLET_2026-07.csv");
 

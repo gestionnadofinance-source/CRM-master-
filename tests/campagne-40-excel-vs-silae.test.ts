@@ -21,7 +21,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { getStorageDriver } from "@/lib/storage";
-import { previewSilaeExport } from "@/server/silae/actions";
+import { previewSilaeExportCore, generateSilaeExportCore } from "@/server/silae/core";
 import type { AuthContext } from "@/server/auth/session";
 import type { SilaeReport } from "@/server/silae/report";
 
@@ -128,7 +128,7 @@ beforeAll(async () => {
     });
   }
 
-  const res = await previewSilaeExport(crmId, ANNEE, MOIS, { exportWorkedHours: true }, ctx);
+  const res = await previewSilaeExportCore(ctx, crmId, ANNEE, MOIS, { exportWorkedHours: true });
   rapport = res.report ?? null;
 });
 

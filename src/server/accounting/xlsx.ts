@@ -1,5 +1,6 @@
 import "server-only";
 import ExcelJS from "exceljs";
+import { isFrenchHoliday } from "@/server/silae/holidays";
 
 /**
  * Génère le tableau de comptabilité Excel à partir des fiches de pointage
@@ -42,6 +43,11 @@ export interface AccountingWeekInput {
   maskBonus: number;
   zoneBonus: number;
   kmPerDay: number; // distanceKm x kmRate, 0 si le remboursement km n'était pas coché
+  /** Indemnité de trajet, par jour travaillé (colonne X « voyage »). */
+  travelAllowance: number;
+  /** Grands déplacements de la semaine, par barème — des NOMBRES, pas des montants. */
+  gdDepl53Count: number;
+  gdDepl80Count: number;
 }
 
 export interface AccountingExportInput {
@@ -52,7 +58,10 @@ export interface AccountingExportInput {
   roomDeduction: number;
 }
 
-const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
+// Indexées par getUTCDay() (0 = dimanche) et non par la position dans le
+// bloc : une semaine tronquée par le début ou la fin du mois ne commence pas
+// un lundi, et l'indexer par position appelait « lundi » le mercredi 1er.
+const DAY_LETTERS = ["D", "L", "M", "M", "J", "V", "S"];
 
 /** Intitulés des colonnes D à AA (24 colonnes), identiques au modèle fourni. */
 const HEADERS: Array<string | number> = [
@@ -122,6 +131,29 @@ function colLetter(n: number): string {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Mois de paie couvert par le classeur : celui qui porte le plus de jours
+ * travaillés parmi les semaines retenues, à égalité le plus ancien.
+ *
+ * Le classeur de référence est découpé au mois — sa première semaine
+ * commence au 1er, sa dernière s'arrête au 31 — parce qu'un TOTAL qui
+ * déborderait sur le mois suivant ferait payer en juillet des heures d'août.
+ * La règle de rattachement est la même que celle de l'export Silae
+ * (owningMonth), pour que les deux fichiers racontent la même chose.
+ */
+function payrollMonthOf(weeks: AccountingWeekInput[]): string {
+  const counts = new Map<string, number>();
+  for (const w of weeks) {
+    for (const d of w.days) {
+      if (dayHours(d) <= 0 && (d.nuit || 0) <= 0) continue;
+      const key = d.date.slice(0, 7);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  if (counts.size === 0) return weeks[0]?.days[0]?.date.slice(0, 7) ?? "";
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]![0];
 }
 
 function dayHours(d: AccountingDay): number {
@@ -222,9 +254,16 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
 
   let firstWorkedRowOverall: number | null = null;
 
+  const moisDePaie = payrollMonthOf(input.weeks);
+
   input.weeks.forEach((week, weekIndex) => {
+    // Une semaine à cheval sur deux mois n'apparaît que par ses jours du mois
+    // de paie : sinon le TOTAL mélangerait deux mois de salaire.
+    const joursDuMois = week.days.filter((d) => d.date.startsWith(moisDePaie));
+    if (joursDuMois.length === 0) return;
+
     const weekFirstRow = row;
-    const subtotalRow = weekFirstRow + 7;
+    const subtotalRow = weekFirstRow + joursDuMois.length;
     const weekColor = weekIndex % 2 === 0 ? FILL_WEEK_GREEN : FILL_WEEK_BLUE;
 
     // La cellule fusionnée du numéro de semaine couvre les 7 jours ET la
@@ -236,14 +275,15 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
     weekLabelCell.alignment = { horizontal: "center", vertical: "middle" };
     weekLabelCell.border = THIN_BORDER;
 
-    ws.mergeCells(weekFirstRow, FIRST_DATA_COL, weekFirstRow + 6, FIRST_DATA_COL);
+    const derniereLigne = weekFirstRow + joursDuMois.length - 1;
+    ws.mergeCells(weekFirstRow, FIRST_DATA_COL, derniereLigne, FIRST_DATA_COL);
     ws.getCell(weekFirstRow, FIRST_DATA_COL).value = input.chantierName;
-    ws.mergeCells(weekFirstRow, 6, weekFirstRow + 6, 6); // compteur 8h — vierge
-    ws.mergeCells(weekFirstRow, 7, weekFirstRow + 6, 7); // colonne "0.5" — vierge
+    ws.mergeCells(weekFirstRow, 6, derniereLigne, 6); // compteur 8h — vierge, saisie manuelle
+    ws.mergeCells(weekFirstRow, 7, derniereLigne, 7); // colonne "0.5" — vierge, saisie manuelle
 
     let firstWorkedRowThisWeek: number | null = null;
 
-    week.days.forEach((d, i) => {
+    joursDuMois.forEach((d, i) => {
       const r = row + i;
       styleDataRow(ws, r);
       ws.getCell(r, 2).fill = solidFill(weekColor);
@@ -253,13 +293,17 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
 
       const date = new Date(`${d.date}T00:00:00Z`);
       const isSunday = date.getUTCDay() === 0;
-      ws.getCell(r, 2).value = DAY_LETTERS[i];
-      ws.getCell(r, 3).value = date.getUTCDate();
+      const ferie = isFrenchHoliday(d.date);
+      ws.getCell(r, 2).value = DAY_LETTERS[date.getUTCDay()];
+      // Un jour férié se signale dans la colonne des quantièmes, « 14 F » —
+      // la convention du classeur de référence.
+      ws.getCell(r, 3).value = ferie ? `${date.getUTCDate()} F` : date.getUTCDate();
 
       const hours = dayHours(d);
       const worked = hours > 0 || d.nuit > 0;
       if (hours > 0) {
         ws.getCell(r, isSunday ? 9 : 5).value = hours; // I (dim) ou E (heures)
+        if (ferie) ws.getCell(r, 10).value = hours; // J férié
       }
       if (d.nuit > 0) {
         ws.getCell(r, 8).value = round2(d.nuit); // H nuit
@@ -267,33 +311,36 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
       if (worked && week.kmPerDay > 0) {
         ws.getCell(r, 11).value = round2(week.kmPerDay); // K km
       }
-      if (worked && week.lunchAllowance > 0) {
-        ws.getCell(r, 13).value = round2(week.lunchAllowance); // M repas midi
-      }
-      if (worked && week.dinnerAllowance > 0) {
-        ws.getCell(r, 14).value = round2(week.dinnerAllowance); // N repas soir
-      }
-      if (worked && week.mealAllowance > 0) {
-        ws.getCell(r, 15).value = round2(week.mealAllowance); // O repas 9,81
-      }
+      // Repas : le classeur compte des OCCURRENCES, il ne porte pas de
+      // montants — le tarif est dans l'intitulé de la colonne (« repas midi
+      // 20 », « repas 9,81 »). Y écrire des euros doublait la paie.
+      if (worked && week.lunchAllowance > 0) ws.getCell(r, 13).value = 1; // M repas midi
+      if (worked && week.dinnerAllowance > 0) ws.getCell(r, 14).value = 1; // N repas soir
+      if (worked && week.mealAllowance > 0) ws.getCell(r, 15).value = 1; // O repas 9,81
+      // Primes journalières : poste, masque et zone se comptent par jour
+      // travaillé, pas une fois par semaine.
+      if (worked && week.postBonus > 0) ws.getCell(r, 21).value = round2(week.postBonus); // U poste
+      if (worked && week.maskBonus > 0) ws.getCell(r, 22).value = round2(week.maskBonus); // V masque
+      if (worked && week.travelAllowance > 0) ws.getCell(r, 24).value = round2(week.travelAllowance); // X voyage
+      if (worked && week.zoneBonus > 0) ws.getCell(r, 25).value = round2(week.zoneBonus); // Y zone
       if (worked) {
         if (firstWorkedRowThisWeek === null) firstWorkedRowThisWeek = r;
         if (firstWorkedRowOverall === null) firstWorkedRowOverall = r;
       }
     });
 
-    // Primes forfaitaires par semaine : placées une seule fois (premier
-    // jour travaillé de la semaine) — la formule SUM du sous-total les
-    // totalise correctement même non réparties sur les 7 jours.
+    // Éléments forfaitaires de la SEMAINE : posés une seule fois (premier
+    // jour travaillé) — la formule SUM du sous-total les totalise
+    // correctement sans avoir à les répartir sur chaque jour.
     const anchor = firstWorkedRowThisWeek ?? row;
     if (week.housingAllowance > 0) ws.getCell(anchor, 18).value = round2(week.housingAllowance); // R logement
     if (week.managementBonus > 0) ws.getCell(anchor, 19).value = round2(week.managementBonus); // S management
-    if (week.clothingBonus > 0) ws.getCell(anchor, 20).value = round2(week.clothingBonus); // T prime habillage
-    if (week.postBonus > 0) ws.getCell(anchor, 21).value = round2(week.postBonus); // U poste
-    if (week.maskBonus > 0) ws.getCell(anchor, 22).value = round2(week.maskBonus); // V masque
-    if (week.zoneBonus > 0) ws.getCell(anchor, 25).value = round2(week.zoneBonus); // Y zone
+    // Habillage : un NOMBRE, comme les repas, et non un montant.
+    if (week.clothingBonus > 0) ws.getCell(anchor, 20).value = 1; // T prime habillage
+    if (week.gdDepl53Count > 0) ws.getCell(anchor, 16).value = week.gdDepl53Count; // P gd depl 53
+    if (week.gdDepl80Count > 0) ws.getCell(anchor, 17).value = week.gdDepl80Count; // Q 80
 
-    row += 7;
+    row += joursDuMois.length;
     writeSumRow(ws, row, weekFirstRow, row - 1, "sous total");
     weekSubtotalRows.push(row);
     row += 1;

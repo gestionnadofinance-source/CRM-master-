@@ -19,7 +19,7 @@ import type { Crm, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AccessCategory, CrmRole } from "@/server/permissions";
 import type { AuthContext, SessionUser } from "@/server/auth/session";
-import { createChantier } from "@/server/planning/actions";
+import { createChantierCore } from "@/server/planning/core";
 import { CONTROL_CHARS_MESSAGE } from "@/lib/validation";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -72,7 +72,7 @@ describe("bornes des champs de saisie", () => {
     fd.set("startDate", "2026-09-01");
     fd.set("endDate", "2026-10-31");
     for (const [k, v] of Object.entries(fields)) fd.set(k, v);
-    return createChantier(crm.id, fd, toCtx(owner));
+    return createChantierCore(toCtx(owner), crm.id, fd);
   }
 
   it("accepte une saisie normale", async () => {
