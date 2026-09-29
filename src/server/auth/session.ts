@@ -207,6 +207,28 @@ export async function revokeAllOtherSessions(userId: string, keepSessionId: stri
   });
 }
 
+/**
+ * Conservation des sessions périmées : 30 jours.
+ *
+ * Une session expirée ou révoquée n'ouvre plus rien — getAuthContext la
+ * rejette — mais elle porte l'appareil et l'adresse de la connexion, utiles
+ * pour retrouver a posteriori d'où l'on s'est connecté. On la garde donc un
+ * mois, puis on l'efface : rien ne les purgeait, et il s'en crée une à chaque
+ * connexion, sans limite (createSession ne révoque qu'au-delà de dix sessions
+ * ACTIVES).
+ */
+const SESSION_RETENTION_DAYS = 30;
+
+export async function purgeExpiredSessions(): Promise<number> {
+  const cutoff = new Date(Date.now() - SESSION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const { count } = await prisma.session.deleteMany({
+    where: {
+      OR: [{ expiresAt: { lt: cutoff } }, { revokedAt: { lt: cutoff } }],
+    },
+  });
+  return count;
+}
+
 export class AuthError extends Error {
   code: "UNAUTHENTICATED" | "FORBIDDEN" | "CRM_ACCESS_DENIED";
   constructor(code: AuthError["code"], message: string) {
