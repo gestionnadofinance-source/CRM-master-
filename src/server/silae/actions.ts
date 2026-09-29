@@ -130,7 +130,7 @@ async function collectMonth(crmId: string, year: number, month: number, options:
   const windowStart = new Date(monthStart);
   windowStart.setUTCDate(windowStart.getUTCDate() - 6);
 
-  const [crm, pointages, acomptes, accesses] = await Promise.all([
+  const [crm, pointages, acomptes, accesses, reglages] = await Promise.all([
     prisma.crm.findUniqueOrThrow({ where: { id: crmId }, select: { name: true } }),
     prisma.pointage.findMany({
       where: { crmId, weekStart: { gte: windowStart, lte: monthEnd } },
@@ -142,6 +142,9 @@ async function collectMonth(crmId: string, year: number, month: number, options:
     }),
     prisma.acompte.findMany({ where: { crmId, payrollMonth: monthStart } }),
     prisma.userCrmAccess.findMany({ where: { crmId }, select: { userId: true, silaeMatricule: true } }),
+    // Règle applicable à un dimanche férié : sans elle, ces heures
+    // alimentaient les deux rubriques et Silae majorait deux fois.
+    prisma.crmPointageSettings.findUnique({ where: { crmId }, select: { sundayHolidayRule: true } }),
   ]);
 
   // Les absences ne sont pas exportées (format Silae encore inconnu) : elles
@@ -249,7 +252,10 @@ async function collectMonth(crmId: string, year: number, month: number, options:
 
   const employees = Array.from(weeksByEmployee.entries())
     .map(([userId, { name, weeks }]) => {
-      const agg = aggregateEmployeeMonth(weeks, year, month, { exportWorkedHours: options.exportWorkedHours });
+      const agg = aggregateEmployeeMonth(weeks, year, month, {
+        exportWorkedHours: options.exportWorkedHours,
+        sundayHolidayRule: reglages?.sundayHolidayRule,
+      });
       const acompte = acompteByUser.get(userId);
       if (acompte) agg.totals.acompte = Math.round(acompte * 100) / 100;
       return {

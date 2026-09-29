@@ -18,6 +18,7 @@ import {
   listVaultMembers,
 } from "@/server/vault/actions";
 import { generateAccountingExport } from "@/server/accounting/actions";
+import { ACCESS_CATEGORY_LABELS } from "@/lib/access-categories";
 import { Modal } from "@/components/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Label } from "@/components/ui/input";
@@ -579,7 +580,7 @@ export function AdminVaultPanel({ crmId, members }: { crmId: string; members: Me
             </CardTitle>
           </div>
           <Badge variant={selected.category === "OUVRIER" ? "warning" : "brand"}>
-            {selected.category === "OUVRIER" ? "Ouvrier" : "Commercial"}
+            {ACCESS_CATEGORY_LABELS[selected.category]}
           </Badge>
         </CardHeader>
         <CardContent className="space-y-4">

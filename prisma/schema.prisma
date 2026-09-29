@@ -271,6 +271,21 @@ model CompanySettings {
 // journalières (repas, grand déplacement) sont désormais fixées par
 // chantier (voir Chantier) et les primes individuelles (logement,
 // salissure...) par salarié sur UserCrmAccess.
+/// Ce qu'il advient d'une heure travaillée un dimanche qui est AUSSI férié.
+///
+/// Sans ce réglage, ces heures alimentaient à la fois « heures du dimanche »
+/// et « heures de jour férié », et Silae appliquait donc DEUX majorations,
+/// sans que rien ne le signale. La règle applicable dépend de la convention
+/// collective : elle se choisit ici plutôt que de se deviner dans le code.
+enum SundayHolidayRule {
+  /// Les deux rubriques sont alimentées (comportement historique).
+  CUMUL
+  /// Seules les heures fériées sont comptées.
+  FERIE_PRIORITAIRE
+  /// Seules les heures du dimanche sont comptées.
+  DIMANCHE_PRIORITAIRE
+}
+
 model CrmPointageSettings {
   id               String   @id @default(cuid())
   crmId            String   @unique
@@ -280,6 +295,9 @@ model CrmPointageSettings {
   // maintenant à partir du taux horaire de base du salarié (voir
   // UserCrmAccess.defaultHourlyRate).
   nightRatePercent Decimal  @default(25) @db.Decimal(5, 2)
+  /// Voir SundayHolidayRule. Par défaut, le férié l'emporte : c'est le seul
+  /// choix qui ne risque pas de payer deux majorations par inadvertance.
+  sundayHolidayRule SundayHolidayRule @default(FERIE_PRIORITAIRE)
   updatedAt        DateTime @updatedAt
 }
 

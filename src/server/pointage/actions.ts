@@ -22,6 +22,8 @@ import { isTransverseCategory } from "@/server/permissions";
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  /** Renseigné par les actions d'upsert, pour que l'API publique réponde 201 ou 200. */
+  created?: boolean;
 }
 
 /**
@@ -132,11 +134,15 @@ export async function getPointageSettings(crmId: string) {
   const s = await getOrCreatePointageSettings(crmId);
   return {
     nightRatePercent: Number(s.nightRatePercent),
+    sundayHolidayRule: s.sundayHolidayRule,
   };
 }
 
 const settingsSchema = z.object({
   nightRatePercent: z.coerce.number().min(0).max(500),
+  // Voir SundayHolidayRule dans prisma/schema.prisma : la règle dépend de la
+  // convention collective, elle se choisit donc ici et pas dans le code.
+  sundayHolidayRule: z.enum(["CUMUL", "FERIE_PRIORITAIRE", "DIMANCHE_PRIORITAIRE"]).default("FERIE_PRIORITAIRE"),
 });
 
 export async function updatePointageSettings(crmId: string, formData: FormData): Promise<ActionResult> {
@@ -290,6 +296,10 @@ export async function listChantierRosterForWeek(crmId: string, chantierId: strin
       chantierAmounts,
       assignmentRates,
       applied,
+      grandsDeplacements: {
+        gdDepl53Count: existing?.gdDepl53Count ?? 0,
+        gdDepl80Count: existing?.gdDepl80Count ?? 0,
+      },
       comments: existing?.comments ?? "",
       totals: computePointageTotals(days, rates, primes, chantierAmounts, assignmentRates, applied),
     };
@@ -326,6 +336,13 @@ const upsertSchema = z.object({
   travelHoursReimbursementApplied: boolField,
   mealAllowanceApplied: boolField,
   clothingBonusApplied: boolField,
+  // Nombres de grands déplacements de la semaine, par barème. Bornés à 7 :
+  // c'est une feuille hebdomadaire, on ne peut pas en compter plus que de
+  // jours. Sans ces deux champs, les colonnes existaient en base et étaient
+  // lues par l'export Silae, mais RIEN ne les écrivait : les deux rubriques
+  // restaient à zéro et n'apparaissaient jamais dans le fichier.
+  gdDepl53Count: z.coerce.number().int().min(0).max(7).default(0),
+  gdDepl80Count: z.coerce.number().int().min(0).max(7).default(0),
   comments: z.string().trim().max(2000).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).optional().or(z.literal("")),
 });
 
@@ -377,6 +394,15 @@ export async function upsertPointageEntry(
     }
   }
 
+  // L'API publique doit pouvoir distinguer une création d'une mise à jour
+  // (201 ou 200) : Prisma ne le dit pas après coup, et comparer createdAt à
+  // updatedAt serait faux dès que deux écritures tombent dans la même
+  // milliseconde. Une lecture sur la clé unique tranche sans ambiguïté.
+  const dejaSaisie = await prisma.pointage.findUnique({
+    where: { chantierId_employeeId_weekStart: { chantierId, employeeId: parsed.data.employeeId, weekStart } },
+    select: { id: true },
+  });
+
   await prisma.pointage.upsert({
     where: { chantierId_employeeId_weekStart: { chantierId, employeeId: parsed.data.employeeId, weekStart } },
     create: {
@@ -401,6 +427,8 @@ export async function upsertPointageEntry(
       travelHoursReimbursementApplied: parsed.data.travelHoursReimbursementApplied,
       mealAllowanceApplied: parsed.data.mealAllowanceApplied,
       clothingBonusApplied: parsed.data.clothingBonusApplied,
+      gdDepl53Count: parsed.data.gdDepl53Count,
+      gdDepl80Count: parsed.data.gdDepl80Count,
       comments: parsed.data.comments || null,
     },
     update: {
@@ -421,6 +449,8 @@ export async function upsertPointageEntry(
       travelHoursReimbursementApplied: parsed.data.travelHoursReimbursementApplied,
       mealAllowanceApplied: parsed.data.mealAllowanceApplied,
       clothingBonusApplied: parsed.data.clothingBonusApplied,
+      gdDepl53Count: parsed.data.gdDepl53Count,
+      gdDepl80Count: parsed.data.gdDepl80Count,
       comments: parsed.data.comments || null,
     },
   });
@@ -434,7 +464,7 @@ export async function upsertPointageEntry(
     newValue: { employeeId: parsed.data.employeeId, weekStart: weekStart.toISOString() },
   });
   revalidatePath(`/c/${tenant.crmSlug}/pointage-salaries`);
-  return { ok: true };
+  return { ok: true, created: !dejaSaisie };
 }
 
 export async function deletePointageEntry(crmId: string, pointageId: string, actorCtx?: AuthContext): Promise<ActionResult> {

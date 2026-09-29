@@ -58,9 +58,12 @@ export type RubriqueTotals = Record<string, number>;
 
 export interface WeekAnomaly {
   weekStart: Date;
-  kind: "heures_hebdo_excessives" | "valeur_negative";
+  kind: "heures_hebdo_excessives" | "valeur_negative" | "dimanche_ferie";
   detail: string;
 }
+
+/** Voir SundayHolidayRule dans prisma/schema.prisma. */
+export type SundayHolidayRule = "CUMUL" | "FERIE_PRIORITAIRE" | "DIMANCHE_PRIORITAIRE";
 
 export interface EmployeeAggregation {
   totals: RubriqueTotals;
@@ -109,8 +112,12 @@ export function aggregateEmployeeMonth(
   weeks: AggregationWeekInput[],
   year: number,
   month: number,
-  options: { exportWorkedHours?: boolean } = {}
+  options: { exportWorkedHours?: boolean; sundayHolidayRule?: SundayHolidayRule } = {}
 ): EmployeeAggregation {
+  // Par défaut, le férié l'emporte : c'est le seul choix qui ne risque pas de
+  // faire appliquer DEUX majorations à la même heure sans que personne ne le
+  // demande. Le cumul reste possible, mais il doit être choisi.
+  const regleDimancheFerie = options.sundayHolidayRule ?? "FERIE_PRIORITAIRE";
   const totals: RubriqueTotals = {};
   const anomalies: WeekAnomaly[] = [];
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
@@ -158,8 +165,25 @@ export function aggregateEmployeeMonth(
       const date = new Date(`${d.date}T00:00:00Z`);
       if (options.exportWorkedHours) add(totals, "heuresTravaillees", h);
       if (d.nuit > 0) add(totals, "heuresNuit", d.nuit);
-      if (date.getUTCDay() === 0) add(totals, "heuresDimanche", h);
-      if (isFrenchHoliday(d.date)) add(totals, "heuresFerie", h);
+
+      const estDimanche = date.getUTCDay() === 0;
+      const estFerie = isFrenchHoliday(d.date);
+      if (estDimanche && estFerie) {
+        // Un jour à la fois dimanche et férié : alimenter les deux rubriques
+        // ferait appliquer deux majorations à la même heure. La règle vient
+        // du paramétrage de l'espace, et le cas est signalé quoi qu'il
+        // arrive — y compris en cumul, qui doit rester un choix conscient.
+        if (regleDimancheFerie !== "FERIE_PRIORITAIRE") add(totals, "heuresDimanche", h);
+        if (regleDimancheFerie !== "DIMANCHE_PRIORITAIRE") add(totals, "heuresFerie", h);
+        anomalies.push({
+          weekStart: week.weekStart,
+          kind: "dimanche_ferie",
+          detail: `${d.date} : ${round2(h)} h travaillées un dimanche férié (règle appliquée : ${regleDimancheFerie})`,
+        });
+      } else {
+        if (estDimanche) add(totals, "heuresDimanche", h);
+        if (estFerie) add(totals, "heuresFerie", h);
+      }
     }
 
     // Montants « jours travaillés × taux » : prorata exact.

@@ -9,6 +9,12 @@ import { getStorageDriver } from "@/lib/storage";
  * document ou à un administrateur du CRM (MANAGE_SETTINGS). L'appartenance
  * au CRM seule ne suffit jamais ici — un ouvrier ne doit jamais pouvoir
  * récupérer la fiche de paie d'un autre ouvrier en devinant son id.
+ *
+ * Tout refus répond 404, jamais 403 : un 403 confirmerait l'existence du
+ * document à qui en détient l'identifiant, là où un 404 est indistinguable
+ * d'un identifiant inventé. C'est la règle déjà posée pour les pages de CRM
+ * (voir requireCrmAccessBySlugOrNotFound dans src/server/tenant.ts) ; elle
+ * vaut tout autant ici, où le document est une fiche de paie.
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,11 +34,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const isOwner = document.userId === ctx.user.id;
     const isAdmin = canManageOperations(tenant);
     if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
   } catch (err) {
     if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.code }, { status: 403 });
+      return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
     throw err;
   }

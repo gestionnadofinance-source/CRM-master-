@@ -12,10 +12,16 @@
  *   CHARLIE deux chantiers, chacun avec frais SNCF et retenue de chambre ;
  *   DELTA   des heures, aucun matricule : doit BLOQUER la génération.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// revalidatePath exige le contexte d'une requête Next, qui n'existe pas dans
+// un processus de test. Ce test porte sur la validation, l'écriture et
+// l'export — pas sur l'invalidation de cache, qui n'a de sens qu'en requête.
+vi.mock("next/cache", () => ({ revalidatePath: () => undefined, revalidateTag: () => undefined }));
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/crypto";
 import { previewSilaeExport, generateSilaeExport } from "@/server/silae/actions";
+import { upsertPointageEntry } from "@/server/pointage/actions";
 import type { AuthContext } from "@/server/auth/session";
 
 const SLUG = "__test__silae_juillet_2026";
@@ -210,6 +216,39 @@ describe("juillet 2026, de la base au fichier", () => {
     // que personne ne s'en aperçoive : l'export des absences n'existe pas.
     const { report } = await previewSilaeExport(crmId, 2026, 7, {}, ctx);
     expect(report!.reminders).toContain("Test BRAVO : Congé payé, du 2026-07-06 au 2026-07-10 — 5 j.");
+  });
+
+  it("les grands déplacements saisis par le chef se retrouvent dans l'export", async () => {
+    // Ces deux colonnes existaient en base et étaient lues par l'export, mais
+    // aucune saisie ne les alimentait : les rubriques restaient à zéro et ne
+    // figuraient jamais dans le fichier. On repasse ici par la vraie action
+    // de saisie, pas par une écriture directe en base.
+    const chantier = await prisma.chantier.findFirstOrThrow({ where: { crmId, name: "C1" } });
+    const fd = new FormData();
+    fd.set("employeeId", userIds.alpha!);
+    fd.set("weekStart", new Date("2026-07-06T00:00:00Z").toISOString());
+    fd.set("days", JSON.stringify(days("2026-07-06", FULL)));
+    fd.set("hourlyRate", "12");
+    fd.set("nightRatePercent", "25");
+    fd.set("dirtAllowance", "5");
+    fd.set("lunchAllowanceApplied", "true");
+    fd.set("managementBonusApplied", "true");
+    fd.set("gdDepl53Count", "3");
+    fd.set("gdDepl80Count", "2");
+
+    const res = await upsertPointageEntry(crmId, chantier.id, fd, ctx);
+    expect(res.ok).toBe(true);
+    // La fiche existait déjà : c'est une mise à jour, pas une création.
+    expect(res.created).toBe(false);
+
+    const { report } = await previewSilaeExport(crmId, 2026, 7, {}, ctx);
+    const alpha = report!.employees.find((e) => e.name === "Test ALPHA")!;
+    const val = (cle: string) => alpha.lines.find((l) => l.rubrique === cle)?.value;
+    expect(val("grandDeplacement53")).toBe(3);
+    expect(val("grandDeplacement80")).toBe(2);
+
+    const codes = alpha.lines.filter((l) => l.rubrique.startsWith("grandDeplacement")).map((l) => l.code);
+    expect(codes.sort()).toEqual(["EV-GdDepl53", "EV-GdDepl80"]);
   });
 
   it("DELTA sans matricule bloque la génération du fichier", async () => {

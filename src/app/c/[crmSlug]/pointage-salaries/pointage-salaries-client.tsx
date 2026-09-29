@@ -292,6 +292,9 @@ function EntryForm({
   const [days, setDays] = useState(entry.days);
   // Seules les primes propres au salarié restent des montants saisis.
   const [primes, setPrimes] = useState(entry.primes);
+  // Grands déplacements : un NOMBRE par barème, pas un montant — Silae
+  // applique lui-même le barème (voir src/server/silae/rubriques.ts).
+  const [grandsDeplacements, setGrandsDeplacements] = useState(entry.grandsDeplacements);
   const [hourlyRate, setHourlyRate] = useState(entry.rates.hourlyRate);
   const [nightRatePercent, setNightRatePercent] = useState(entry.rates.nightRatePercent);
   // Cases à cocher : le montant vient du chantier (les 7 premières) ou de
@@ -351,6 +354,8 @@ function EntryForm({
     fd.set("travelHoursReimbursementApplied", String(applied.travelHoursReimbursementApplied));
     fd.set("mealAllowanceApplied", String(applied.mealAllowanceApplied));
     fd.set("clothingBonusApplied", String(applied.clothingBonusApplied));
+    fd.set("gdDepl53Count", String(grandsDeplacements.gdDepl53Count));
+    fd.set("gdDepl80Count", String(grandsDeplacements.gdDepl80Count));
     fd.set("comments", comments);
     onSubmit(fd);
   }
@@ -485,6 +490,37 @@ function EntryForm({
           <div>
             <Label className="text-xs">Prime salissure (€)</Label>
             <Input type="number" min={0} step={0.5} value={primes.dirtAllowance} onChange={(e) => setPrimes({ ...primes, dirtAllowance: Number(e.target.value) || 0 })} />
+          </div>
+        </div>
+        <p className="mb-2 mt-4 text-xs font-medium text-text">
+          Grands déplacements <span className="font-normal text-muted">(nombre de jours, pas un montant)</span>
+        </p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+          <div>
+            <Label className="text-xs">Barème 53</Label>
+            <Input
+              type="number"
+              min={0}
+              max={7}
+              step={1}
+              value={grandsDeplacements.gdDepl53Count}
+              onChange={(e) =>
+                setGrandsDeplacements({ ...grandsDeplacements, gdDepl53Count: Number(e.target.value) || 0 })
+              }
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Barème 80</Label>
+            <Input
+              type="number"
+              min={0}
+              max={7}
+              step={1}
+              value={grandsDeplacements.gdDepl80Count}
+              onChange={(e) =>
+                setGrandsDeplacements({ ...grandsDeplacements, gdDepl80Count: Number(e.target.value) || 0 })
+              }
+            />
           </div>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireApiKey, requireWriteAccess, unauthorizedResponse, readPagination } from "@/server/public-api/auth";
+import { denyReadRequest, requireWriteAccess, readPagination } from "@/server/public-api/auth";
 import { jsonToFormData, actionResultResponse, withWriteErrorHandling } from "@/server/public-api/write-helpers";
 import { createChantier } from "@/server/planning/actions";
 
 export async function GET(request: NextRequest) {
-  const apiKey = await requireApiKey(request);
-  if (!apiKey) return unauthorizedResponse();
+  const refus = await denyReadRequest(request);
+  if (refus) return refus;
 
   const { skip, take, page, perPage } = readPagination(request);
 

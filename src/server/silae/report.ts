@@ -148,11 +148,13 @@ export function buildSilaeReport(
     }
     for (const a of emp.anomalies) {
       const when = a.weekStart.toISOString().slice(0, 10);
-      warningSet.add(
+      const message =
         a.kind === "heures_hebdo_excessives"
           ? `${emp.name}, semaine du ${when} : ${a.detail}.`
-          : `${emp.name}, semaine du ${when} : valeur négative (${a.detail}).`
-      );
+          : a.kind === "dimanche_ferie"
+            ? `${emp.name} : ${a.detail}. Vérifiez que c'est bien la règle de votre convention collective (Paramètres de l'espace).`
+            : `${emp.name}, semaine du ${when} : valeur négative (${a.detail}).`;
+      warningSet.add(message);
     }
 
     return {

@@ -2,12 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { updatePointageSettings } from "@/server/pointage/actions";
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 export interface PointageSettingsData {
   nightRatePercent: number;
+  /** Voir SundayHolidayRule dans prisma/schema.prisma. */
+  sundayHolidayRule: "CUMUL" | "FERIE_PRIORITAIRE" | "DIMANCHE_PRIORITAIRE";
 }
 
 export function PointageSection({ crmId, initial }: { crmId: string; initial: PointageSettingsData }) {
@@ -45,7 +47,20 @@ export function PointageSection({ crmId, initial }: { crmId: string; initial: Po
               <Label htmlFor="nightRatePercent">Majoration heure de nuit (%)</Label>
               <Input id="nightRatePercent" name="nightRatePercent" type="number" min={0} step={1} defaultValue={initial.nightRatePercent} />
             </div>
+            <div>
+              <Label htmlFor="sundayHolidayRule">Dimanche qui est aussi férié</Label>
+              <Select id="sundayHolidayRule" name="sundayHolidayRule" defaultValue={initial.sundayHolidayRule}>
+                <option value="FERIE_PRIORITAIRE">Compter en jour férié seulement</option>
+                <option value="DIMANCHE_PRIORITAIRE">Compter en dimanche seulement</option>
+                <option value="CUMUL">Compter dans les deux (deux majorations)</option>
+              </Select>
+            </div>
           </div>
+          <p className="text-xs text-muted">
+            Une heure travaillée un dimanche férié ne doit pas être majorée deux fois sans que ce soit voulu.
+            La règle dépend de votre convention collective ; l&apos;export Silae signale chaque cas rencontré,
+            quelle que soit l&apos;option retenue.
+          </p>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
           {success && <p className="text-sm text-emerald-700 dark:text-emerald-400">Enregistré.</p>}

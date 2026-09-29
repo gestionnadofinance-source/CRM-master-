@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireApiKey, requireWriteAccess, unauthorizedResponse, readPagination } from "@/server/public-api/auth";
+import { denyReadRequest, requireWriteAccess, readPagination } from "@/server/public-api/auth";
 import { jsonToFormData, actionResultResponse, withWriteErrorHandling } from "@/server/public-api/write-helpers";
 import { upsertPointageEntry } from "@/server/pointage/actions";
 
 export async function GET(request: NextRequest) {
-  const apiKey = await requireApiKey(request);
-  if (!apiKey) return unauthorizedResponse();
+  const refus = await denyReadRequest(request);
+  if (refus) return refus;
 
   const { skip, take, page, perPage } = readPagination(request);
 
@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
 
     const formBody = { ...body, days: JSON.stringify(body.days ?? []) };
     const result = await upsertPointageEntry(String(body.crmId), String(body.chantierId), jsonToFormData(formBody), access.actor);
-    return actionResultResponse(result, 201);
+    // 201 seulement si la fiche vient d'être créée : cette route est un
+    // upsert, et répondre 201 sur une mise à jour empêchait un client
+    // d'apprendre ce qu'il avait réellement fait.
+    return actionResultResponse(result, result.created ? 201 : 200);
   });
 }

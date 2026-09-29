@@ -20,3 +20,15 @@ import type { AccessCategory } from "@prisma/client";
 export function isTransverseCategory(category: AccessCategory): boolean {
   return category === "SECRETAIRE" || category === "COMPTABLE";
 }
+
+/**
+ * Intitulé affiché d'une catégorie d'accès. Vit ici, avec
+ * isTransverseCategory, pour qu'ajouter une catégorie n'oblige pas à courir
+ * après les écrans : le coffre-fort affichait encore « Commercial » pour
+ * toute catégorie autre qu'OUVRIER, alors que ce profil avait été supprimé.
+ */
+export const ACCESS_CATEGORY_LABELS: Record<AccessCategory, string> = {
+  OUVRIER: "Ouvrier",
+  SECRETAIRE: "Secrétaire",
+  COMPTABLE: "Comptable",
+};

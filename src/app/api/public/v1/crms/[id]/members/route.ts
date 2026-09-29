@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireApiKey, unauthorizedResponse } from "@/server/public-api/auth";
+import { denyReadRequest, unauthorizedResponse } from "@/server/public-api/auth";
 import { listCrmMembers } from "@/server/shared/members";
 
 /**
@@ -14,8 +14,8 @@ import { listCrmMembers } from "@/server/shared/members";
  * `listCrmMembers`.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const apiKey = await requireApiKey(request);
-  if (!apiKey) return unauthorizedResponse();
+  const refus = await denyReadRequest(request);
+  if (refus) return refus;
 
   const { id } = await params;
   const crm = await prisma.crm.findUnique({ where: { id }, select: { id: true, isActive: true } });

@@ -11,6 +11,7 @@ import "server-only";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashToken } from "@/lib/crypto";
+import { assertNotRateLimited, recordRateLimitHit } from "@/lib/rate-limit";
 import type { AuthContext } from "@/server/auth/session";
 import type { ApiKeyPermission } from "@prisma/client";
 
@@ -62,6 +63,55 @@ export async function requireApiKey(request: NextRequest): Promise<ApiKeyContext
   return { id: apiKey.id, name: apiKey.name, permission: apiKey.permission };
 }
 
+/**
+ * Limitation de fréquence de l'authentification par clé API.
+ *
+ * Ne compte QUE les tentatives en échec : une intégration légitime, qui
+ * présente une clé valide, n'est jamais bridée, quel que soit son rythme.
+ * Seule la recherche de clé par tâtonnement est freinée. Les clés font 32
+ * octets aléatoires, donc les deviner reste hors de portée de toute façon —
+ * mais rien ne justifie de laisser un anonyme marteler ce point d'entrée à
+ * plusieurs centaines de requêtes par seconde.
+ */
+const AUTH_RATE_LIMIT = { scope: "public-api-auth", windowMinutes: 15, maxAttempts: 30 };
+
+function callerIp(request: NextRequest): string {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "inconnu";
+}
+
+export function tooManyRequestsResponse() {
+  return Response.json(
+    { error: "Trop de tentatives d'authentification. Réessayez dans quelques minutes." },
+    { status: 429 }
+  );
+}
+
+/**
+ * Refus éventuel d'une requête de LECTURE sur l'API publique : 429 si les
+ * échecs d'authentification s'accumulent depuis cette adresse, 401 si la clé
+ * est absente, invalide ou révoquée. `null` quand la requête peut passer.
+ *
+ * Les routes n'utilisaient la clé que pour ce contrôle, jamais ensuite : ce
+ * helper remplace le couple requireApiKey/unauthorizedResponse et fait porter
+ * la limitation à un seul endroit.
+ */
+export async function denyReadRequest(request: NextRequest): Promise<Response | null> {
+  // La clé est vérifiée AVANT la limite de fréquence, et non l'inverse : une
+  // intégration qui présente une clé valide ne doit jamais être bridée, même
+  // si d'autres échecs sont partis de la même adresse. Seul l'échec compte.
+  const apiKey = await findActiveApiKey(request);
+  if (apiKey) return null;
+
+  const ip = callerIp(request);
+  try {
+    await assertNotRateLimited(AUTH_RATE_LIMIT.scope, ip, AUTH_RATE_LIMIT);
+  } catch {
+    return tooManyRequestsResponse();
+  }
+  await recordRateLimitHit(AUTH_RATE_LIMIT.scope, ip);
+  return unauthorizedResponse();
+}
+
 export function unauthorizedResponse() {
   return Response.json({ error: "Clé API absente, invalide ou révoquée." }, { status: 401 });
 }
@@ -89,8 +139,19 @@ export type WriteAccessResult =
  * (notifications, journal d'activité, mouvements de pipeline...).
  */
 export async function requireWriteAccess(request: NextRequest): Promise<WriteAccessResult> {
+  // Même ordre que denyReadRequest : la clé d'abord, la limite ensuite, pour
+  // qu'une clé valide passe toujours.
   const apiKey = await findActiveApiKey(request);
-  if (!apiKey) return { ok: false, response: unauthorizedResponse() };
+  if (!apiKey) {
+    const ip = callerIp(request);
+    try {
+      await assertNotRateLimited(AUTH_RATE_LIMIT.scope, ip, AUTH_RATE_LIMIT);
+    } catch {
+      return { ok: false, response: tooManyRequestsResponse() };
+    }
+    await recordRateLimitHit(AUTH_RATE_LIMIT.scope, ip);
+    return { ok: false, response: unauthorizedResponse() };
+  }
   if (apiKey.permission !== "READ_WRITE") return { ok: false, response: forbiddenWriteResponse() };
 
   return {

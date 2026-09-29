@@ -202,21 +202,54 @@ describe("juillet 2026 — agrégation par salarié", () => {
   });
 });
 
-describe("cumul dimanche et jour férié", () => {
-  // DÉFAUT CONNU, non corrigé : la règle de paie applicable (priorité au
-  // férié, au dimanche, ou cumul des deux) doit être tranchée par le
-  // gestionnaire de paie — la deviner reviendrait à inventer une majoration.
-  // `it.fails` documente l'écart sans masquer le défaut : ce test redeviendra
-  // rouge le jour où le comportement changera, ce qui forcera à le relire.
-  it.fails("un dimanche férié ne doit pas être majoré deux fois", () => {
-    // Reproduit BUG-006. Le 1er novembre 2026 (Toussaint) est un dimanche :
-    // les heures alimentent à la fois heuresDimanche et heuresFerie, et les
-    // deux rubriques étant exportées, Silae applique les deux majorations.
-    const weeks = [week("2026-10-26", [null, null, null, null, null, null, 6])];
-    const { totals } = aggregateEmployeeMonth(weeks, 2026, 11);
+describe("dimanche qui est aussi férié", () => {
+  // Le 1er novembre 2026 (Toussaint) tombe un dimanche. Sans règle, ces
+  // heures alimentaient les deux rubriques et Silae appliquait DEUX
+  // majorations sans rien signaler. La règle dépend de la convention
+  // collective : elle se choisit dans les paramètres de l'espace.
+  const semaineToussaint = [week("2026-10-26", [null, null, null, null, null, null, 6])];
 
+  it("par défaut, ne majore pas deux fois : seul le férié est compté", () => {
+    const { totals } = aggregateEmployeeMonth(semaineToussaint, 2026, 11);
+    expect(totals.heuresFerie).toBe(6);
+    expect(totals.heuresDimanche).toBeUndefined();
+  });
+
+  it("peut au contraire ne compter que le dimanche", () => {
+    const { totals } = aggregateEmployeeMonth(semaineToussaint, 2026, 11, {
+      sundayHolidayRule: "DIMANCHE_PRIORITAIRE",
+    });
     expect(totals.heuresDimanche).toBe(6);
     expect(totals.heuresFerie).toBeUndefined();
+  });
+
+  it("le cumul reste possible, mais devient un choix explicite", () => {
+    const { totals } = aggregateEmployeeMonth(semaineToussaint, 2026, 11, { sundayHolidayRule: "CUMUL" });
+    expect(totals.heuresDimanche).toBe(6);
+    expect(totals.heuresFerie).toBe(6);
+  });
+
+  it("signale le cas quelle que soit la règle retenue", () => {
+    for (const regle of ["FERIE_PRIORITAIRE", "DIMANCHE_PRIORITAIRE", "CUMUL"] as const) {
+      const { anomalies } = aggregateEmployeeMonth(semaineToussaint, 2026, 11, { sundayHolidayRule: regle });
+      expect(anomalies.map((a) => a.kind)).toContain("dimanche_ferie");
+    }
+  });
+
+  it("un dimanche ordinaire et un férié en semaine restent comptés normalement", () => {
+    // Garde-fou : la règle ne doit toucher QUE la coïncidence des deux.
+    const dimancheOrdinaire = aggregateEmployeeMonth(
+      [week("2026-07-06", [null, null, null, null, null, null, 6])],
+      2026,
+      7
+    );
+    expect(dimancheOrdinaire.totals.heuresDimanche).toBe(6);
+    expect(dimancheOrdinaire.totals.heuresFerie).toBeUndefined();
+
+    // Mardi 14 juillet 2026 : férié, pas un dimanche.
+    const ferieEnSemaine = aggregateEmployeeMonth([week("2026-07-13", [7, 7, 7, 7, 7, null, null])], 2026, 7);
+    expect(ferieEnSemaine.totals.heuresFerie).toBe(7);
+    expect(ferieEnSemaine.totals.heuresDimanche).toBeUndefined();
   });
 });
 
