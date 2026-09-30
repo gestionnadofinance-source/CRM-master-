@@ -357,8 +357,8 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
     if (weekOwningMonth(week.days) === moisDePaie) {
       if (week.housingAllowance > 0) ws.getCell(anchor, 18).value = round2(week.housingAllowance); // R logement
       if (week.managementBonus > 0) ws.getCell(anchor, 19).value = round2(week.managementBonus); // S management
-      // Habillage : un NOMBRE, comme les repas, et non un montant.
-      if (week.clothingBonus > 0) ws.getCell(anchor, 20).value = 1; // T prime habillage
+      // Habillage : un MONTANT en euros, forfaitaire à la semaine.
+      if (week.clothingBonus > 0) ws.getCell(anchor, 20).value = round2(week.clothingBonus); // T prime habillage
       if (week.gdDepl53Count > 0) ws.getCell(anchor, 16).value = week.gdDepl53Count; // P gd depl 53
       if (week.gdDepl80Count > 0) ws.getCell(anchor, 17).value = week.gdDepl80Count; // Q 80
     }

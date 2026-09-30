@@ -109,16 +109,18 @@ describe("computePointageTotals", () => {
     expect(totals.travelHoursTotal).toBe(60); // 2 jours x 2h x 15€
   });
 
-  it("treats the flat chantier bonuses (mask/management/zone/post/clothing) as per-week amounts, not multiplied by days worked", () => {
+  it("compte masque/zone/poste PAR JOUR travaillé, et management/habillage en forfait hebdomadaire", () => {
     const days = emptyDays();
     days[0]!.normal = 8;
     days[1]!.normal = 8;
     days[2]!.normal = 8; // 3 jours travaillés
     const totals = computePointageTotals(days, RATES, NO_PRIMES, CHANTIER_AMOUNTS, ASSIGNMENT_RATES, ALL_APPLIED);
-    expect(totals.maskTotal).toBe(1);
+    // Journalières : montant × 3 jours.
+    expect(totals.maskTotal).toBe(3); // 1 × 3
+    expect(totals.zoneTotal).toBe(6); // 2 × 3
+    expect(totals.postTotal).toBe(12); // 4 × 3
+    // Forfaitaires à la semaine : inchangées quel que soit le nombre de jours.
     expect(totals.managementTotal).toBe(3);
-    expect(totals.zoneTotal).toBe(2);
-    expect(totals.postTotal).toBe(4);
     expect(totals.clothingTotal).toBe(6);
   });
 
@@ -183,7 +185,9 @@ describe("activeIndemnityKeys / activePrimeLines (rien n'apparaît sur le PDF sa
 
   it("hides every prime line left at 0/unchecked and keeps only the ones actually due", () => {
     const primes = { housingAllowance: 12, dirtAllowance: 0 };
-    const totals = computePointageTotals(emptyDays(), RATES, primes, CHANTIER_AMOUNTS, ASSIGNMENT_RATES, {
+    const days = emptyDays();
+    days[0]!.normal = 8; // 1 jour : la prime masque (journalière) vaut alors 1 × 1
+    const totals = computePointageTotals(days, RATES, primes, CHANTIER_AMOUNTS, ASSIGNMENT_RATES, {
       ...NONE_APPLIED,
       maskBonusApplied: true,
     });

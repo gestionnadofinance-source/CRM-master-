@@ -144,8 +144,8 @@ describe("buildAccountingWorkbook", () => {
     // Forfaits de la SEMAINE : une seule fois, sur le premier jour travaillé.
     expect(ws.getCell(wednesdayRow, 18).value).toBe(10); // R logement
     expect(ws.getCell(wednesdayRow, 19).value).toBe(3); // S management
-    // Habillage : un NOMBRE par semaine, comme les repas.
-    expect(ws.getCell(wednesdayRow, 20).value).toBe(1); // T prime habillage
+    // Habillage : un MONTANT en euros, forfaitaire à la semaine.
+    expect(ws.getCell(wednesdayRow, 20).value).toBe(15); // T prime habillage
     // Primes JOURNALIÈRES : leur montant se répète sur chaque jour travaillé.
     expect(ws.getCell(wednesdayRow, 21).value).toBe(4); // U poste
     expect(ws.getCell(wednesdayRow, 22).value).toBe(1); // V masque

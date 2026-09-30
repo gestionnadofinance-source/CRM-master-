@@ -192,6 +192,12 @@ export function aggregateEmployeeMonth(
       add(totals, "indemniteKm", round2(weekTotals.kmTotal * ratio));
       add(totals, "indemniteTrajet", round2(weekTotals.travelTotal * ratio));
       add(totals, "remboursementTrajet", round2(weekTotals.travelHoursTotal * ratio));
+      // Primes JOURNALIÈRES (masque, zone, poste) : dues par jour travaillé,
+      // donc proratisées au mois comme les km — une semaine à cheval répartit
+      // ses primes entre les deux mois, exactement comme le classeur Excel.
+      add(totals, "primeMasque", round2(weekTotals.maskTotal * ratio));
+      add(totals, "primeZone", round2(weekTotals.zoneTotal * ratio));
+      add(totals, "primePoste", round2(weekTotals.postTotal * ratio));
       // Repas et paniers : un NOMBRE, pas un montant — Silae applique le
       // barème. On compte les jours travaillés du mois quand la case est
       // cochée, et non le montant calculé par le moteur.
@@ -206,10 +212,7 @@ export function aggregateEmployeeMonth(
       const { hs25, hs50 } = splitWeeklyOvertime(weekTotals.totalHours);
       add(totals, "hs25", hs25);
       add(totals, "hs50", hs50);
-      add(totals, "primeMasque", weekTotals.maskTotal);
       add(totals, "primeManagement", weekTotals.managementTotal);
-      add(totals, "primeZone", weekTotals.zoneTotal);
-      add(totals, "primePoste", weekTotals.postTotal);
       add(totals, "primeHabillage", weekTotals.clothingTotal);
       add(totals, "logement", week.housingAllowance);
       add(totals, "primeSalissure", week.dirtAllowance);

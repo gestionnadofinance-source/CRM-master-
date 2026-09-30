@@ -124,10 +124,14 @@ export function computePointageTotals(
   const travelHoursTotal = applied.travelHoursReimbursementApplied
     ? round2(daysWorked * assignmentRates.travelDurationHours * assignmentRates.travelHourlyRate)
     : 0;
-  const maskTotal = applied.maskBonusApplied ? round2(chantierAmounts.maskBonus) : 0;
+  // Masque, zone et poste sont des primes JOURNALIÈRES : leur montant est dû
+  // pour chaque jour travaillé, comme les repas (voir le classeur Fidem, qui
+  // les porte sur chaque ligne de jour). Management et habillage restent
+  // forfaitaires à la semaine.
+  const maskTotal = applied.maskBonusApplied ? round2(daysWorked * chantierAmounts.maskBonus) : 0;
   const managementTotal = applied.managementBonusApplied ? round2(chantierAmounts.managementBonus) : 0;
-  const zoneTotal = applied.zoneBonusApplied ? round2(chantierAmounts.zoneBonus) : 0;
-  const postTotal = applied.postBonusApplied ? round2(chantierAmounts.postBonus) : 0;
+  const zoneTotal = applied.zoneBonusApplied ? round2(daysWorked * chantierAmounts.zoneBonus) : 0;
+  const postTotal = applied.postBonusApplied ? round2(daysWorked * chantierAmounts.postBonus) : 0;
   const mealTotal = applied.mealAllowanceApplied ? round2(daysWorked * chantierAmounts.mealAllowance) : 0;
   const clothingTotal = applied.clothingBonusApplied ? round2(chantierAmounts.clothingBonus) : 0;
 
