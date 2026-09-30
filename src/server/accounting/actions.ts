@@ -1,6 +1,5 @@
 "use server";
 
-import { getISOWeek } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/server/auth/session";
 import { requireOperationsAccess, assertBelongsToCrm } from "@/server/tenant";
@@ -9,7 +8,7 @@ import { logActivity } from "@/server/activity";
 import { revalidatePath } from "next/cache";
 import { VaultDocumentCategory } from "@prisma/client";
 import { findOrCreateRootFolder } from "@/server/vault/actions";
-import { buildAccountingWorkbook, type AccountingWeekInput, type AccountingDay } from "@/server/accounting/xlsx";
+import { buildEmployeeAccountingWorkbook } from "@/server/accounting/core";
 
 export interface ActionResult {
   ok: boolean;
@@ -101,17 +100,6 @@ export async function listAccountingDocumentsForUser(crmId: string, targetUserId
   });
 }
 
-function toDayArray(value: unknown): AccountingDay[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((d) => ({
-    date: String((d as Record<string, unknown>).date ?? ""),
-    normal: Number((d as Record<string, unknown>).normal) || 0,
-    matin: Number((d as Record<string, unknown>).matin) || 0,
-    apresMidi: Number((d as Record<string, unknown>).apresMidi) || 0,
-    nuit: Number((d as Record<string, unknown>).nuit) || 0,
-  }));
-}
-
 /**
  * Transforme les fiches de pointage salarié sélectionnées dans le
  * coffre-fort en un tableau de comptabilité Excel, déposé dans le dossier
@@ -187,34 +175,12 @@ export async function generateAccountingExport(
   }
   const foremanId = Array.from(foremanCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
-  const weeks: AccountingWeekInput[] = sortedPointages.map((p) => ({
-    isoWeek: getISOWeek(p.weekStart),
-    days: toDayArray(p.days),
-    housingAllowance: Number(p.housingAllowance),
-    lunchAllowance: p.lunchAllowanceApplied ? Number(chantier.lunchAllowance) : 0,
-    dinnerAllowance: p.dinnerAllowanceApplied ? Number(chantier.dinnerAllowance) : 0,
-    mealAllowance: p.mealAllowanceApplied ? Number(chantier.mealAllowance) : 0,
-    managementBonus: p.managementBonusApplied ? Number(chantier.managementBonus) : 0,
-    clothingBonus: p.clothingBonusApplied ? Number(chantier.clothingBonus) : 0,
-    postBonus: p.postBonusApplied ? Number(chantier.postBonus) : 0,
-    maskBonus: p.maskBonusApplied ? Number(chantier.maskBonus) : 0,
-    zoneBonus: p.zoneBonusApplied ? Number(chantier.zoneBonus) : 0,
-    kmPerDay: p.kmReimbursementApplied ? Number(assignment?.distanceKm ?? 0) * Number(assignment?.kmRate ?? 0) : 0,
-    // Indemnité de trajet et grands déplacements : le CRM les détenait déjà,
-    // mais ils n'étaient jamais reportés dans le classeur — colonnes X, P et
-    // Q laissées vides, donc ressaisies à la main ou perdues.
-    travelAllowance: p.travelAllowanceApplied ? Number(chantier.travelAllowance) : 0,
-    gdDepl53Count: p.gdDepl53Count,
-    gdDepl80Count: p.gdDepl80Count,
-  }));
-
-  const buffer = await buildAccountingWorkbook({
-    employeeName: `${employee.firstName} ${employee.lastName}`,
-    chantierName: chantier.name,
-    weeks,
-    sncfExpense: Number(assignment?.sncfExpense ?? 0),
-    roomDeduction: Number(assignment?.roomDeduction ?? 0),
-  });
+  const buffer = await buildEmployeeAccountingWorkbook(
+    `${employee.firstName} ${employee.lastName}`,
+    chantier,
+    assignment,
+    sortedPointages
+  );
 
   const fileName = `Comptabilité - ${employee.firstName} ${employee.lastName} - ${chantier.name}.xlsx`;
   const driver = getStorageDriver();
@@ -248,7 +214,7 @@ export async function generateAccountingExport(
     action: "accounting.export_generated",
     entityType: "VAULT_DOCUMENT",
     entityId: doc.id,
-    newValue: { employeeId, chantierId, weekCount: weeks.length },
+    newValue: { employeeId, chantierId, weekCount: sortedPointages.length },
   });
 
   revalidatePath(`/c/${tenant.crmSlug}/vault`);
