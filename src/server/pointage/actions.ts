@@ -20,7 +20,7 @@ import { sendEmail, baseEmailLayout } from "@/lib/email";
 import { publishToUser } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { VaultDocumentCategory } from "@prisma/client";
-import { findOrCreateRootFolder } from "@/server/vault/actions";
+import { findOrCreateRootFolder } from "@/server/vault/core";
 import { computePointageTotals, mondayOf, buildEmptyWeek, type PointageDay } from "@/server/pointage/calc";
 import { renderEmployeeTimesheetPdf, renderClientTimesheetPdf } from "@/server/pointage/pdf";
 import { MAX_CODE, MAX_ID, MAX_LONG, tooLong, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
@@ -436,11 +436,46 @@ export async function emailEmployeeTimesheets(crmId: string, chantierId: string,
  * plus le dépôt des autres, et est journalisé + renvoyé dans
  * failedEmployees plutôt que de silencieusement laisser certains salariés
  * sans fiche sans que personne ne le sache (voir l'audit).
+ *
+ * L'action ne LÈVE jamais d'exception vers l'écran : une exception d'action
+ * serveur remplace toute la page par « This page couldn't load », sans dire
+ * ce qui s'est passé ni ce qui a déjà été déposé. Un refus d'accès ou une
+ * panne est donc toujours rendu sous forme de message.
  */
 export async function depositEmployeeTimesheets(crmId: string, chantierId: string, weekStartIso: string): Promise<TimesheetsResult> {
-  const ctx = await requireAuth();
-  const tenant = await requireCrmAccess(ctx, crmId);
-  await requireForeman(ctx, tenant, chantierId);
+  let ctx: AuthContext;
+  let tenant: TenantContext;
+  try {
+    ctx = await requireAuth();
+    tenant = await requireCrmAccess(ctx, crmId);
+    await requireForeman(ctx, tenant, chantierId);
+  } catch (err) {
+    if (err instanceof AuthError) return { ok: false, error: err.message };
+    throw err;
+  }
+
+  try {
+    return await depositEmployeeTimesheetsFor(ctx, tenant, chantierId, weekStartIso);
+  } catch (err) {
+    console.error(`depositEmployeeTimesheets: échec général (chantier ${chantierId}, semaine ${weekStartIso})`, err);
+    if (err instanceof AuthError) return { ok: false, error: err.message };
+    return {
+      ok: false,
+      error:
+        "Le dépôt a été interrompu par une erreur serveur. Une partie des fiches a pu être déposée : vérifiez la liste des fiches déjà déposées avant de relancer.",
+    };
+  }
+}
+
+/** Dépôts menés de front : assez pour ne pas dépasser le délai d'exécution, assez peu pour la mémoire. */
+const DEPOSIT_CONCURRENCY = 5;
+
+async function depositEmployeeTimesheetsFor(
+  ctx: AuthContext,
+  tenant: TenantContext,
+  chantierId: string,
+  weekStartIso: string
+): Promise<TimesheetsResult> {
   const { chantier, weekStart, weekEnd, pointages, assignmentByEmployee, chantierAmounts } = await loadWeekData(
     tenant,
     chantierId,
@@ -454,8 +489,10 @@ export async function depositEmployeeTimesheets(crmId: string, chantierId: strin
   const failedEmployees: string[] = [];
   let depositedCount = 0;
 
-  for (const p of pointages) {
+  async function deposerUne(p: (typeof pointages)[number]): Promise<boolean> {
     const employeeName = `${p.employee.firstName} ${p.employee.lastName}`;
+    let doc: { id: string };
+    let fileName: string;
     try {
       const buffer = await renderEmployeeTimesheetPdf({
         crmName: tenant.crmName,
@@ -486,11 +523,11 @@ export async function depositEmployeeTimesheets(crmId: string, chantierId: strin
         },
         comments: p.comments,
       });
-      const fileName = `Pointage S${weekNumber} - ${employeeName}.pdf`;
+      fileName = `Pointage S${weekNumber} - ${employeeName}.pdf`;
       const { storageKey } = await driver.put({ buffer, fileName, crmId: tenant.crmId, mimeType: "application/pdf" });
       const folderId = await findOrCreateRootFolder(tenant.crmId, p.employeeId, folderName, ctx.user.id);
 
-      const doc = await prisma.vaultDocument.create({
+      doc = await prisma.vaultDocument.create({
         data: {
           crmId: tenant.crmId,
           userId: p.employeeId,
@@ -508,7 +545,16 @@ export async function depositEmployeeTimesheets(crmId: string, chantierId: strin
           uploadedById: ctx.user.id,
         },
       });
+    } catch (err) {
+      console.error(`depositEmployeeTimesheets: échec pour ${employeeName} (chantier ${chantierId}, semaine ${weekStartIso})`, err);
+      failedEmployees.push(employeeName);
+      return false;
+    }
 
+    // La fiche est déposée : la prévenir est un plus, pas une condition. Un
+    // service temps réel indisponible ne doit pas faire déclarer en échec —
+    // et donc redéposer en double — une fiche qui est bien dans le coffre.
+    try {
       await prisma.notification.create({
         data: {
           crmId: tenant.crmId,
@@ -522,11 +568,18 @@ export async function depositEmployeeTimesheets(crmId: string, chantierId: strin
         },
       });
       await publishToUser(p.employeeId, "notification.created", { kind: "vault_document" });
-      depositedCount++;
     } catch (err) {
-      console.error(`depositEmployeeTimesheets: échec pour ${employeeName} (chantier ${chantierId}, semaine ${weekStartIso})`, err);
-      failedEmployees.push(employeeName);
+      console.error(`depositEmployeeTimesheets: fiche déposée mais notification impossible pour ${employeeName}`, err);
     }
+    return true;
+  }
+
+  // Par lots menés de front : en séquentiel, un chantier d'une dizaine de
+  // salariés dépassait le délai d'exécution de l'hébergeur (rendu PDF +
+  // envoi au stockage + écritures, salarié après salarié).
+  for (let i = 0; i < pointages.length; i += DEPOSIT_CONCURRENCY) {
+    const lot = await Promise.all(pointages.slice(i, i + DEPOSIT_CONCURRENCY).map(deposerUne));
+    depositedCount += lot.filter(Boolean).length;
   }
 
   if (depositedCount === 0) {

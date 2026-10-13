@@ -5,7 +5,7 @@ import { logActivity } from "@/server/activity";
 import { publishToUser } from "@/lib/realtime";
 import { revalidatePath } from "next/cache";
 import { VaultDocumentCategory } from "@prisma/client";
-import { findOrCreateRootFolder } from "@/server/vault/actions";
+import { findOrCreateRootFolder } from "@/server/vault/core";
 import { renderMissionOrderPdf } from "@/server/mission-order/pdf";
 import { loadMissionOrderData } from "@/server/mission-order/data";
 

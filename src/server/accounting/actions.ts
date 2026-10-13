@@ -7,7 +7,7 @@ import { getStorageDriver } from "@/lib/storage";
 import { logActivity } from "@/server/activity";
 import { revalidatePath } from "next/cache";
 import { VaultDocumentCategory } from "@prisma/client";
-import { findOrCreateRootFolder } from "@/server/vault/actions";
+import { findOrCreateRootFolder } from "@/server/vault/core";
 import { buildEmployeeAccountingWorkbook } from "@/server/accounting/core";
 
 export interface ActionResult {

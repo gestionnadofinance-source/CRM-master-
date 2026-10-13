@@ -156,3 +156,20 @@ export async function moveVaultFolderCore(
   revalidatePath("/admin/vault");
   return { ok: true };
 }
+
+/**
+ * Retrouve, ou crée, un dossier racine de ce nom dans le coffre-fort de
+ * `ownerUserId`. Utilisé par les dépôts automatiques (fiches de pointage,
+ * ordre de mission) qui n'ont pas de contexte de permission MANAGE_SETTINGS
+ * — l'appelant est responsable d'avoir déjà vérifié ses propres droits.
+ *
+ * Vit ici, dans un module serveur, et non dans vault/actions.ts : tout export
+ * d'un fichier « use server » devient une action appelable par n'importe quel
+ * client, et cette fonction ne vérifie aucun droit.
+ */
+export async function findOrCreateRootFolder(crmId: string, ownerUserId: string, name: string, createdById: string): Promise<string> {
+  const existing = await prisma.vaultFolder.findFirst({ where: { crmId, ownerUserId, parentId: null, name } });
+  if (existing) return existing.id;
+  const created = await prisma.vaultFolder.create({ data: { crmId, ownerUserId, name, parentId: null, createdById } });
+  return created.id;
+}

@@ -4,6 +4,12 @@ import { requireCrmAccessBySlug } from "@/server/tenant";
 import { amIForeman, listMyForemanChantiers } from "@/server/pointage/actions";
 import { PointageSalariesClient } from "./pointage-salaries-client";
 
+// Délai d'exécution des actions serveur de cette page (voir la doc Next
+// « maxDuration ») : le dépôt au coffre-fort rend et stocke un PDF par
+// salarié, ce qui dépasse le délai par défaut de l'hébergeur sur un chantier
+// d'une dizaine de salariés. 60 s est accepté par toutes les offres Vercel.
+export const maxDuration = 60;
+
 export default async function PointageSalariesPage({ params }: { params: Promise<{ crmSlug: string }> }) {
   const { crmSlug } = await params;
   const ctx = await requireAuth();

@@ -15,19 +15,6 @@ import { CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 export type { ActionResult };
 
 /**
- * Retrouve, ou crée, un dossier racine de ce nom dans le coffre-fort de
- * `ownerUserId`. Utilisé par les dépôts automatiques (fiches de pointage,
- * ordre de mission) qui n'ont pas de contexte de permission MANAGE_SETTINGS
- * — l'appelant est responsable d'avoir déjà vérifié ses propres droits.
- */
-export async function findOrCreateRootFolder(crmId: string, ownerUserId: string, name: string, createdById: string): Promise<string> {
-  const existing = await prisma.vaultFolder.findFirst({ where: { crmId, ownerUserId, parentId: null, name } });
-  if (existing) return existing.id;
-  const created = await prisma.vaultFolder.create({ data: { crmId, ownerUserId, name, parentId: null, createdById } });
-  return created.id;
-}
-
-/**
  * Ce que le coffre-fort a besoin de savoir d'un document pour l'afficher et le
  * classer. `chantier` et `periodStart` portent les regroupements par chantier
  * et par mois (voir VaultDocument dans prisma/schema.prisma) ; ils sont nuls

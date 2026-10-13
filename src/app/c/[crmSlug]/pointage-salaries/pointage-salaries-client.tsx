@@ -130,14 +130,27 @@ export function PointageSalariesClient({ crmId, chantiers }: { crmId: string; ch
     setNotice(null);
     setError(null);
     startTransition(async () => {
-      const res = await depositEmployeeTimesheets(crmId, chantierId, weekAnchor.toISOString());
+      let res: Awaited<ReturnType<typeof depositEmployeeTimesheets>>;
+      try {
+        res = await depositEmployeeTimesheets(crmId, chantierId, weekAnchor.toISOString());
+      } catch {
+        // Pas de réponse exploitable (délai dépassé, coupure réseau) : sans ce
+        // rattrapage, l'exception remplace toute la page par un écran
+        // d'erreur, et le chef ne sait pas ce qui a été déposé.
+        setError(
+          "Le serveur n'a pas répondu à temps. Une partie des fiches a pu être déposée : vérifiez la liste des fiches déjà déposées avant de relancer."
+        );
+        await refresh().catch(() => setLoading(false));
+        return;
+      }
       if (!res.ok) {
         setError(res.error ?? "Erreur lors du dépôt.");
+        await refresh().catch(() => setLoading(false));
         return;
       }
       setNoticeHasFailures(!!res.failedEmployees?.length);
       setNotice(`Fiches déposées dans le coffre-fort de chaque salarié.${failureSuffix(res.failedEmployees)}`);
-      await refresh();
+      await refresh().catch(() => setLoading(false));
     });
   }
 
