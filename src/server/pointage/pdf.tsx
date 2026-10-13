@@ -105,6 +105,12 @@ export interface EmployeeTimesheetData {
   assignmentRates: AssignmentTravelRates;
   applied: PointageAppliedFlags;
   comments: string | null;
+  /**
+   * Fiche destinée au chef de chantier (envoi par email) : aucun montant
+   * dérivé du taux horaire — majoration de nuit, prime de management — n'y
+   * figure, sans quoi le taux se recalcule d'une simple division.
+   */
+  masquerMontantsTaux?: boolean;
 }
 
 const PRIME_LABELS: Record<
@@ -121,9 +127,15 @@ const PRIME_LABELS: Record<
 };
 
 export function EmployeeTimesheetPdfDocument({ data }: { data: EmployeeTimesheetData }) {
-  const totals = computePointageTotals(data.days, data.rates, data.primes, data.chantierAmounts, data.assignmentRates, data.applied);
+  const masquer = data.masquerMontantsTaux === true;
+  // Fiche masquée : le taux n'entre même pas dans le calcul, rien ne peut fuir.
+  const rates = masquer ? { ...data.rates, hourlyRate: 0 } : data.rates;
+  const totals = computePointageTotals(data.days, rates, data.primes, data.chantierAmounts, data.assignmentRates, data.applied);
   const indemnityKeys = activeIndemnityKeys(totals);
   const primeLines = activePrimeLines(data.primes, totals);
+  // Dus, mais chiffrés à la paie seulement : la ligne reste, sans montant.
+  const nuitSansMontant = masquer && totals.totalNuit > 0 && data.rates.nightRatePercent > 0;
+  const managementSansMontant = masquer && data.applied.managementBonusApplied && totals.daysWorked > 0;
   return (
     <Document title={`Pointage ${data.employeeName} S${data.weekNumber}`} author={data.crmName}>
       <Page size="A4" style={empStyles.page}>
@@ -176,15 +188,15 @@ export function EmployeeTimesheetPdfDocument({ data }: { data: EmployeeTimesheet
         <View style={empStyles.summaryBlock}>
           <View style={empStyles.summaryCol}>
             <Text style={empStyles.summaryTitle}>Indemnités ({totals.daysWorked} jour{totals.daysWorked > 1 ? "s" : ""} travaillé{totals.daysWorked > 1 ? "s" : ""})</Text>
-            {indemnityKeys.length === 0 && <Text style={{ color: "#8896a6" }}>Aucune</Text>}
-            {indemnityKeys.includes("night") && (
+            {indemnityKeys.length === 0 && !nuitSansMontant && <Text style={{ color: "#8896a6" }}>Aucune</Text>}
+            {(indemnityKeys.includes("night") || nuitSansMontant) && (
               <View style={empStyles.summaryLine}>
                 {/* Le taux horaire n'est pas imprimé : la fiche passe entre les
                     mains du chef de chantier, qui ne doit pas le connaître. */}
                 <Text>
                   Heures de nuit ({formatHours(totals.totalNuit)} h, majoration {data.rates.nightRatePercent}%)
                 </Text>
-                <Text>{formatEur(totals.nightBonusAmount)}</Text>
+                <Text>{nuitSansMontant ? "calculée à la paie" : formatEur(totals.nightBonusAmount)}</Text>
               </View>
             )}
             {indemnityKeys.includes("lunch") && (
@@ -230,15 +242,25 @@ export function EmployeeTimesheetPdfDocument({ data }: { data: EmployeeTimesheet
           </View>
           <View style={empStyles.summaryCol}>
             <Text style={empStyles.summaryTitle}>Primes</Text>
-            {primeLines.length === 0 && <Text style={{ color: "#8896a6" }}>Aucune</Text>}
+            {primeLines.length === 0 && !managementSansMontant && <Text style={{ color: "#8896a6" }}>Aucune</Text>}
             {primeLines.map((line) => (
               <View style={empStyles.summaryLine} key={line.key}>
                 <Text>{PRIME_LABELS[line.key]}</Text>
                 <Text>{line.unit === "unite" ? `${line.amount} unité${line.amount > 1 ? "s" : ""}` : formatEur(line.amount)}</Text>
               </View>
             ))}
+            {managementSansMontant && (
+              <View style={empStyles.summaryLine}>
+                <Text>{PRIME_LABELS.managementBonus}</Text>
+                <Text>calculée à la paie</Text>
+              </View>
+            )}
             <View style={empStyles.summaryLineFinal}>
-              <Text>Total frais de la semaine</Text>
+              <Text>
+                {nuitSansMontant || managementSansMontant
+                  ? "Total frais de la semaine (hors montants calculés à la paie)"
+                  : "Total frais de la semaine"}
+              </Text>
               <Text>{formatEur(totals.grandTotal)}</Text>
             </View>
           </View>

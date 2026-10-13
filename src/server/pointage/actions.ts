@@ -409,6 +409,9 @@ export async function emailEmployeeTimesheets(crmId: string, chantierId: string,
               clothingBonusApplied: p.clothingBonusApplied,
             },
             comments: p.comments,
+            // Ces fiches partent dans la boîte du chef de chantier, qui ne
+            // doit pas pouvoir en déduire le taux horaire de ses salariés.
+            masquerMontantsTaux: true,
           });
           return {
             ok: true as const,
