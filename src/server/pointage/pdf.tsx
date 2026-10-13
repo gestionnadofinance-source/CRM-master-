@@ -179,21 +179,23 @@ export function EmployeeTimesheetPdfDocument({ data }: { data: EmployeeTimesheet
             {indemnityKeys.length === 0 && <Text style={{ color: "#8896a6" }}>Aucune</Text>}
             {indemnityKeys.includes("night") && (
               <View style={empStyles.summaryLine}>
+                {/* Le taux horaire n'est pas imprimé : la fiche passe entre les
+                    mains du chef de chantier, qui ne doit pas le connaître. */}
                 <Text>
-                  Heures de nuit ({formatHours(totals.totalNuit)} h × {formatEur(data.rates.hourlyRate)} × {data.rates.nightRatePercent}%)
+                  Heures de nuit ({formatHours(totals.totalNuit)} h, majoration {data.rates.nightRatePercent}%)
                 </Text>
                 <Text>{formatEur(totals.nightBonusAmount)}</Text>
               </View>
             )}
             {indemnityKeys.includes("lunch") && (
               <View style={empStyles.summaryLine}>
-                <Text>Repas midi</Text>
+                <Text>Repas midi (× {totals.lunchCount})</Text>
                 <Text>{formatEur(totals.lunchTotal)}</Text>
               </View>
             )}
             {indemnityKeys.includes("dinner") && (
               <View style={empStyles.summaryLine}>
-                <Text>Repas soir</Text>
+                <Text>Repas soir (× {totals.dinnerCount})</Text>
                 <Text>{formatEur(totals.dinnerTotal)}</Text>
               </View>
             )}
@@ -232,7 +234,7 @@ export function EmployeeTimesheetPdfDocument({ data }: { data: EmployeeTimesheet
             {primeLines.map((line) => (
               <View style={empStyles.summaryLine} key={line.key}>
                 <Text>{PRIME_LABELS[line.key]}</Text>
-                <Text>{formatEur(line.amount)}</Text>
+                <Text>{line.unit === "unite" ? `${line.amount} unité${line.amount > 1 ? "s" : ""}` : formatEur(line.amount)}</Text>
               </View>
             ))}
             <View style={empStyles.summaryLineFinal}>

@@ -29,7 +29,7 @@ import { buildSilaeReport, type MappingRow } from "@/server/silae/report";
 import { encodeSilaeCsv, renderSilaeCsv, silaeFileName, SILAE_HEADER } from "@/server/silae/csv";
 import { RUBRIQUES } from "@/server/silae/rubriques";
 import { buildAccountingWorkbook, type AccountingWeekInput } from "@/server/accounting/xlsx";
-import type { PointageDay } from "@/server/pointage/calc";
+import { mealDates, managementDailyAmount, type PointageDay } from "@/server/pointage/calc";
 
 // --- Chantier de référence -------------------------------------------------
 // Montants volontairement ronds : chaque total attendu est recalculable de
@@ -40,11 +40,9 @@ const CHANTIER = {
   dinnerAllowance: 0,
   travelAllowance: 0,
   maskBonus: 0,
-  managementBonus: 100,
   zoneBonus: 0,
   postBonus: 0,
   mealAllowance: 0,
-  clothingBonus: 0,
 };
 const NO_TRAVEL = { kmRate: 0, distanceKm: 0, travelHourlyRate: 0, travelDurationHours: 0 };
 const APPLIED = {
@@ -82,7 +80,9 @@ function week(monday: string, perDay: Parameters<typeof days>[1], over: Partial<
     hourlyRate: 12,
     nightRatePercent: 25,
     housingAllowance: 0,
-    dirtAllowance: 0,
+    dirtAllowanceApplied: false,
+    lunchCount: null,
+    dinnerCount: null,
     gdDepl53Count: 0,
     gdDepl80Count: 0,
     chantierAmounts: CHANTIER,
@@ -124,7 +124,7 @@ describe("juillet 2026 — agrégation par salarié", () => {
     expect(totals.heuresFerie).toBe(7); // mardi 14 juillet
     expect(totals.heuresDimanche).toBeUndefined();
     expect(totals.repasMidi).toBe(15); // un repas par jour travaillé
-    expect(totals.primeManagement).toBe(300); // forfait hebdomadaire × 3
+    expect(totals.primeManagement).toBe(90); // 50 % de 12 € = 6 € × 15 jours
     // 35 h par semaine : aucune heure supplémentaire.
     expect(totals.hs25).toBeUndefined();
     expect(totals.hs50).toBeUndefined();
@@ -132,7 +132,7 @@ describe("juillet 2026 — agrégation par salarié", () => {
 
   it("BRAVO : semaine à cheval juin/juillet, 40 h — le journalier se répartit, l'hebdomadaire va à juillet", () => {
     // Lundi 29 et mardi 30 juin, puis mercredi 1er au vendredi 3 juillet.
-    const weeks = [week("2026-06-29", [8, 8, 8, 8, 8, null, null], { dirtAllowance: 5 })];
+    const weeks = [week("2026-06-29", [8, 8, 8, 8, 8, null, null], { dirtAllowanceApplied: true })];
     const juillet = aggregateEmployeeMonth(weeks, 2026, 7, { exportWorkedHours: true });
     const juin = aggregateEmployeeMonth(weeks, 2026, 6, { exportWorkedHours: true });
 
@@ -145,13 +145,24 @@ describe("juillet 2026 — agrégation par salarié", () => {
     // Hebdomadaire : juillet porte la majorité des jours travaillés (3 c. 2).
     expect(juillet.totals.hs25).toBe(5); // 40 h − 35 h, dans la bande des 8 premières
     expect(juillet.totals.hs50).toBeUndefined();
-    expect(juillet.totals.primeManagement).toBe(100);
-    expect(juillet.totals.primeSalissure).toBe(5);
+    // Salissure : une UNITÉ par semaine, au mois qui possède la semaine.
+    expect(juillet.totals.primeSalissure).toBe(1);
+    expect(juin.totals.primeSalissure).toBeUndefined();
     expect(juin.totals.hs25).toBeUndefined();
-    expect(juin.totals.primeManagement).toBeUndefined();
+    // Management : journalier (6 € par jour), réparti comme les jours.
+    expect(juillet.totals.primeManagement).toBe(18);
+    expect(juin.totals.primeManagement).toBe(12);
 
     // Rien ne doit être perdu ni compté deux fois entre les deux mois.
     expect(juillet.totals.heuresTravaillees! + juin.totals.heuresTravaillees!).toBe(40);
+  });
+
+  it("repas au nombre choisi : rattachés aux premiers jours travaillés, partagés entre les deux mois", () => {
+    // 4 repas midi sur la semaine du 29/06 : lundi 29, mardi 30 juin, puis
+    // mercredi 1er et jeudi 2 juillet — 2 pour chaque mois, pas 3 et 2.
+    const weeks = [week("2026-06-29", [8, 8, 8, 8, 8, null, null], { lunchCount: 4 })];
+    expect(aggregateEmployeeMonth(weeks, 2026, 6).totals.repasMidi).toBe(2);
+    expect(aggregateEmployeeMonth(weeks, 2026, 7).totals.repasMidi).toBe(2);
   });
 
   it("CHARLIE : deux chantiers dans le mois — les frais d'affectation s'ADDITIONNENT", () => {
@@ -391,11 +402,11 @@ describe("juillet 2026 — le tableau Excel et l'import Silae concordent", () =>
     isoWeek: 28 + i,
     days: days(m, perWeek[i]!),
     housingAllowance: 0,
-    lunchAllowance: CHANTIER.lunchAllowance,
-    dinnerAllowance: 0,
+    lunchDates: mealDates(days(m, perWeek[i]!), null),
+    dinnerDates: [],
     mealAllowance: 0,
-    managementBonus: CHANTIER.managementBonus,
-    clothingBonus: 0,
+    managementPerDay: managementDailyAmount(12),
+    clothingUnits: 0,
     postBonus: 0,
     maskBonus: 0,
     zoneBonus: 0,

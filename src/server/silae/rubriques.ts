@@ -61,11 +61,12 @@ export const RUBRIQUES: RubriqueDefinition[] = [
 
   // --- Primes (montants) ----------------------------------------------
   { key: "primeManagement", label: "Prime de management", unit: "montant", defaultCode: "EV-PrimeManagement", defaultExported: true },
-  { key: "primeHabillage", label: "Prime d'habillage", unit: "montant", defaultCode: "EV-PrimeHabillage", defaultExported: true },
+  // Habillage et salissure : une unité par semaine cochée, pas un montant.
+  { key: "primeHabillage", label: "Prime d'habillage", unit: "nombre", defaultCode: "EV-PrimeHabillage", defaultExported: true },
   { key: "primePoste", label: "Prime de poste", unit: "montant", defaultCode: "EV-PrimePoste", defaultExported: true },
   { key: "primeMasque", label: "Prime de masque", unit: "montant", defaultCode: "EV-Masque", defaultExported: true },
   { key: "primeZone", label: "Prime de zone", unit: "montant", defaultCode: "EV-Zone", defaultExported: true },
-  { key: "primeSalissure", label: "Prime de salissure", unit: "montant", defaultCode: "", defaultExported: true,
+  { key: "primeSalissure", label: "Prime de salissure", unit: "nombre", defaultCode: "", defaultExported: true,
     note: "Calculée par le CRM mais absente du classeur Excel : elle était perdue jusqu'ici. Code à obtenir auprès du gestionnaire." },
 
   // --- Repas et déplacements (nombres) --------------------------------

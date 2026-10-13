@@ -131,7 +131,7 @@ beforeAll(async () => {
         days: days(monday, perDay),
         hourlyRate: 12,
         nightRatePercent: 25,
-        dirtAllowance: 5,
+        dirtAllowanceApplied: true,
         lunchAllowanceApplied: true,
         managementBonusApplied: true,
       },
@@ -188,7 +188,10 @@ describe("juillet 2026, de la base au fichier", () => {
     expect(value("heuresTravaillees")).toBe(105);
     expect(value("heuresFerie")).toBe(7);
     expect(value("repasMidi")).toBe(15);
-    expect(value("primeManagement")).toBe(300);
+    // Management : 50 % du taux horaire (12 €) = 6 € par jour × 15 jours.
+    expect(value("primeManagement")).toBe(90);
+    // Salissure : une unité par semaine cochée.
+    expect(value("primeSalissure")).toBe(3);
     expect(value("acompte")).toBe(300);
   });
 
@@ -230,7 +233,7 @@ describe("juillet 2026, de la base au fichier", () => {
     fd.set("days", JSON.stringify(days("2026-07-06", FULL)));
     fd.set("hourlyRate", "12");
     fd.set("nightRatePercent", "25");
-    fd.set("dirtAllowance", "5");
+    fd.set("dirtAllowanceApplied", "true");
     fd.set("lunchAllowanceApplied", "true");
     fd.set("managementBonusApplied", "true");
     fd.set("gdDepl53Count", "3");

@@ -9,9 +9,10 @@
  *
  * Aucune divergence n'est tolérée : chaque rubrique est comparée colonne à
  * colonne, salarié par salarié. Les unités et périodicités confirmées par le
- * gestionnaire sont vérifiées ici — repas en NOMBRE, masque/zone/poste PAR
- * JOUR, management/logement/habillage forfaitaires à la semaine, habillage en
- * euros.
+ * gestionnaire sont vérifiées ici — repas au NOMBRE choisi par le chef de
+ * chantier, masque/zone/poste/management PAR JOUR (management = 50 % du taux
+ * horaire), logement en euros à la semaine, habillage et salissure en UNITÉS
+ * à la semaine.
  *
  * Ce test remplace l'ancienne version qui lisait des classeurs générés par le
  * navigateur : lent, flou et dépendant d'un serveur lancé à la main.
@@ -92,7 +93,7 @@ beforeAll(async () => {
   const crm = await prisma.crm.create({ data: { slug: SLUG, name: "Campagne 40" } });
   crmId = crm.id;
 
-  // 10 chantiers : masque/zone/poste JOURNALIERS, management/habillage HEBDO.
+  // 10 chantiers : masque/zone/poste JOURNALIERS (management : taux horaire).
   const chantiers: Chantier[] = [];
   for (let i = 1; i <= NB_CHANTIERS; i++) {
     chantiers.push(
@@ -102,7 +103,6 @@ beforeAll(async () => {
           startDate: new Date("2026-06-01T00:00:00Z"), endDate: new Date("2026-08-31T00:00:00Z"),
           createdById: admin.id,
           lunchAllowance: 20, dinnerAllowance: 15, mealAllowance: 9.81, travelAllowance: 10 + i,
-          managementBonus: 100 + i, clothingBonus: 12,
           maskBonus: 3, zoneBonus: 4, postBonus: 5,
         },
       })
@@ -133,10 +133,16 @@ beforeAll(async () => {
           data: {
             crmId, chantierId: chantier.id, employeeId: user.id, foremanId: admin.id,
             weekStart: new Date(`${lundi}T00:00:00Z`), days: joursDe(lundi, profil),
-            hourlyRate: 12, nightRatePercent: 25,
-            housingAllowance: i % 3 === 0 ? 40 : 0, dirtAllowance: 0,
+            // Taux variés, dont un dont la moitié tombe sur un demi-centime.
+            hourlyRate: [12, 12.35, 14.5][profil]!, nightRatePercent: 25,
+            housingAllowance: i % 3 === 0 ? 40 : 0,
+            dirtAllowanceApplied: i % 7 === 0,
             lunchAllowanceApplied: true,
+            // Nombre de repas choisi pour une partie des salariés, un par
+            // jour travaillé (ancienne règle, nombre absent) pour les autres.
+            lunchCount: i % 4 === 1 ? 3 : null,
             dinnerAllowanceApplied: profil === 2,
+            dinnerCount: profil === 2 ? 2 : null,
             mealAllowanceApplied: profil !== 0,
             travelAllowanceApplied: i % 2 === 0,
             kmReimbursementApplied: true,
@@ -203,7 +209,8 @@ describe("campagne 40 — le tableau Excel et l'export Silae concordent, salari�
         // Forfaits HEBDOMADAIRES.
         ["management", () => sommeJours(ws, 19), silae("primeManagement")],
         ["logement", () => sommeJours(ws, 18), silae("logement")],
-        ["habillage (€)", () => sommeJours(ws, 20), silae("primeHabillage")],
+        // Habillage : des UNITÉS, une par semaine cochée.
+        ["habillage (unités)", () => sommeJours(ws, 20), silae("primeHabillage")],
         // Grands déplacements : NOMBRES.
         ["gd depl 53", () => sommeJours(ws, 16), silae("grandDeplacement53")],
         ["gd depl 80", () => sommeJours(ws, 17), silae("grandDeplacement80")],
@@ -221,6 +228,20 @@ describe("campagne 40 — le tableau Excel et l'export Silae concordent, salari�
     }
 
     expect(ecarts).toEqual([]);
+  });
+
+  it("unités et nombres attendus, indépendamment de l'Excel", () => {
+    for (let i = 0; i < NB_SALARIES; i++) {
+      const emp = report!.employees.find((e) => e.name === `S EMP${deuxChiffres(i)}`)!;
+      const silae = (cle: string) => emp.lines.find((l) => l.rubrique === cle)?.value ?? 0;
+      // 4 semaines de juillet, toutes rattachées à juillet.
+      expect(silae("primeHabillage"), `EMP${i} habillage`).toBe(i % 8 === 0 ? 4 : 0);
+      expect(silae("primeSalissure"), `EMP${i} salissure`).toBe(i % 7 === 0 ? 4 : 0);
+      // 3 repas midi choisis par semaine × 4 semaines.
+      if (i % 4 === 1) expect(silae("repasMidi"), `EMP${i} repas midi`).toBe(12);
+      // Repas soir : 2 par semaine pour le profil nuit/dimanche.
+      if (i % 3 === 2) expect(silae("repasSoir"), `EMP${i} repas soir`).toBe(8);
+    }
   });
 
   it("les colonnes sans source dans le CRM restent vierges (F, G, Z, AA)", () => {

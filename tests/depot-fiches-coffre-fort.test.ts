@@ -45,7 +45,7 @@ function contexte(u: { id: string; firstName: string; lastName: string; email: s
   return {
     sessionId: "x",
     user: { ...u, status: "ACTIVE", color: null, avatarUrl: null, theme: "SYSTEM", mustChangePassword: false },
-  } as AuthContext;
+  } as unknown as AuthContext;
 }
 
 beforeAll(async () => {

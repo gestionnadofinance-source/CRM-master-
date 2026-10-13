@@ -172,7 +172,9 @@ async function collectMonth(crmId: string, year: number, month: number, options:
       hourlyRate: Number(p.hourlyRate),
       nightRatePercent: Number(p.nightRatePercent),
       housingAllowance: Number(p.housingAllowance),
-      dirtAllowance: Number(p.dirtAllowance),
+      dirtAllowanceApplied: p.dirtAllowanceApplied,
+      lunchCount: p.lunchCount,
+      dinnerCount: p.dinnerCount,
       gdDepl53Count: p.gdDepl53Count,
       gdDepl80Count: p.gdDepl80Count,
       chantierAmounts: {
@@ -180,11 +182,9 @@ async function collectMonth(crmId: string, year: number, month: number, options:
         dinnerAllowance: Number(p.chantier.dinnerAllowance),
         travelAllowance: Number(p.chantier.travelAllowance),
         maskBonus: Number(p.chantier.maskBonus),
-        managementBonus: Number(p.chantier.managementBonus),
         zoneBonus: Number(p.chantier.zoneBonus),
         postBonus: Number(p.chantier.postBonus),
         mealAllowance: Number(p.chantier.mealAllowance),
-        clothingBonus: Number(p.chantier.clothingBonus),
       },
       assignmentRates: {
         kmRate: Number(a?.kmRate ?? 0),

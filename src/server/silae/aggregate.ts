@@ -1,5 +1,5 @@
 import "server-only";
-import { computePointageTotals, type PointageDay } from "@/server/pointage/calc";
+import { computePointageTotals, mealDates, type PointageDay } from "@/server/pointage/calc";
 import { isFrenchHoliday } from "@/server/silae/holidays";
 import { splitWeeklyOvertime } from "@/server/silae/overtime";
 
@@ -16,13 +16,15 @@ import { splitWeeklyOvertime } from "@/server/silae/overtime";
  *
  * 2. Une semaine de pointage peut chevaucher deux mois. La règle de
  *    répartition est explicite :
- *      - ce qui est journalier (heures, repas, km, trajet) est réparti
- *        jour par jour ; seuls les jours DU MOIS comptent ;
- *      - ce qui est forfaitaire à la semaine (primes masque, management,
- *        zone, poste, habillage, logement, salissure) et les heures
- *        supplémentaires — légalement hebdomadaires — vont au mois qui
- *        contient la MAJORITÉ des jours travaillés de la semaine, à
- *        égalité le mois le plus ancien.
+ *      - ce qui est journalier (heures, repas, km, trajet, primes masque,
+ *        zone, poste et management) est réparti jour par jour ; seuls les
+ *        jours DU MOIS comptent. Les repas, dont le chef de chantier choisit
+ *        le nombre, sont rattachés aux premiers jours travaillés ;
+ *      - ce qui est forfaitaire à la semaine (logement, habillage,
+ *        salissure, grands déplacements) et les heures supplémentaires —
+ *        légalement hebdomadaires — vont au mois qui contient la MAJORITÉ
+ *        des jours travaillés de la semaine, à égalité le mois le plus
+ *        ancien.
  *
  * Les montants journaliers ne sont pas recalculés à la main : on appelle le
  * moteur existant (computePointageTotals) sur la semaine entière, puis on
@@ -43,7 +45,10 @@ export interface AggregationWeekInput {
   hourlyRate: number;
   nightRatePercent: number;
   housingAllowance: number;
-  dirtAllowance: number;
+  dirtAllowanceApplied: boolean;
+  /** Nombre de repas choisi ; null = un par jour travaillé (fiches antérieures). */
+  lunchCount: number | null;
+  dinnerCount: number | null;
   gdDepl53Count: number;
   gdDepl80Count: number;
   chantierAmounts: Parameters<typeof computePointageTotals>[3];
@@ -132,7 +137,12 @@ export function aggregateEmployeeMonth(
     const weekTotals = computePointageTotals(
       week.days,
       { hourlyRate: week.hourlyRate, nightRatePercent: week.nightRatePercent },
-      { housingAllowance: week.housingAllowance, dirtAllowance: week.dirtAllowance },
+      {
+        housingAllowance: week.housingAllowance,
+        dirtAllowanceApplied: week.dirtAllowanceApplied,
+        lunchCount: week.lunchCount,
+        dinnerCount: week.dinnerCount,
+      },
       week.chantierAmounts,
       week.assignmentRates,
       week.applied
@@ -198,11 +208,15 @@ export function aggregateEmployeeMonth(
       add(totals, "primeMasque", round2(weekTotals.maskTotal * ratio));
       add(totals, "primeZone", round2(weekTotals.zoneTotal * ratio));
       add(totals, "primePoste", round2(weekTotals.postTotal * ratio));
+      // Management : 50 % du taux horaire PAR JOUR travaillé, donc journalier.
+      add(totals, "primeManagement", round2(weekTotals.managementTotal * ratio));
       // Repas et paniers : un NOMBRE, pas un montant — Silae applique le
-      // barème. On compte les jours travaillés du mois quand la case est
-      // cochée, et non le montant calculé par le moteur.
-      if (week.applied.lunchAllowanceApplied) add(totals, "repasMidi", workedInMonth);
-      if (week.applied.dinnerAllowanceApplied) add(totals, "repasSoir", workedInMonth);
+      // barème. Les repas midi/soir sont ceux choisis par le chef de
+      // chantier, rattachés aux premiers jours travaillés (mealDates) ; le
+      // panier reste dû par jour travaillé.
+      const dansLeMois = (dates: string[]) => dates.filter((dt) => dt.startsWith(monthPrefix)).length;
+      if (week.applied.lunchAllowanceApplied) add(totals, "repasMidi", dansLeMois(mealDates(week.days, week.lunchCount)));
+      if (week.applied.dinnerAllowanceApplied) add(totals, "repasSoir", dansLeMois(mealDates(week.days, week.dinnerCount)));
       if (week.applied.mealAllowanceApplied) add(totals, "panier", workedInMonth);
     }
 
@@ -212,10 +226,10 @@ export function aggregateEmployeeMonth(
       const { hs25, hs50 } = splitWeeklyOvertime(weekTotals.totalHours);
       add(totals, "hs25", hs25);
       add(totals, "hs50", hs50);
-      add(totals, "primeManagement", weekTotals.managementTotal);
-      add(totals, "primeHabillage", weekTotals.clothingTotal);
+      // Habillage et salissure : des UNITÉS (une par semaine cochée).
+      add(totals, "primeHabillage", weekTotals.clothingUnits);
+      add(totals, "primeSalissure", weekTotals.dirtUnits);
       add(totals, "logement", week.housingAllowance);
-      add(totals, "primeSalissure", week.dirtAllowance);
       add(totals, "grandDeplacement53", week.gdDepl53Count);
       add(totals, "grandDeplacement80", week.gdDepl80Count);
       // Frais rattachés à l'AFFECTATION et non à la semaine : retenus une

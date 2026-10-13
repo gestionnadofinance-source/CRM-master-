@@ -12,7 +12,7 @@ import type { PointageDay } from "@/server/pointage/calc";
 
 const NO_AMOUNTS = {
   lunchAllowance: 0, dinnerAllowance: 0, travelAllowance: 0, maskBonus: 0,
-  managementBonus: 0, zoneBonus: 0, postBonus: 0, mealAllowance: 0, clothingBonus: 0,
+  zoneBonus: 0, postBonus: 0, mealAllowance: 0,
 };
 const NO_TRAVEL = { kmRate: 0, distanceKm: 0, travelHourlyRate: 0, travelDurationHours: 0 };
 const NOTHING_APPLIED = {
@@ -34,7 +34,7 @@ function days(start: string, hoursPerDay: (number | null)[]): PointageDay[] {
 function week(over: Partial<AggregationWeekInput> & { days: PointageDay[]; weekStart: Date }): AggregationWeekInput {
   return {
     chantierId: "chantier-1",
-    hourlyRate: 12, nightRatePercent: 25, housingAllowance: 0, dirtAllowance: 0,
+    hourlyRate: 12, nightRatePercent: 25, housingAllowance: 0, dirtAllowanceApplied: false, lunchCount: null, dinnerCount: null,
     gdDepl53Count: 0, gdDepl80Count: 0, chantierAmounts: NO_AMOUNTS, assignmentRates: NO_TRAVEL,
     applied: NOTHING_APPLIED, sncfExpense: 0, roomDeduction: 0, ...over,
   };

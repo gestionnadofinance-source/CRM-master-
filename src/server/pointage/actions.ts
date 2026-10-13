@@ -163,6 +163,12 @@ export async function listChantierRosterForWeek(crmId: string, chantierId: strin
   ]);
 
   const pointageByEmployee = new Map(pointages.map((p) => [p.employeeId, p]));
+  // Le taux horaire de chaque salarié n'est ni montré ni modifiable par le
+  // chef de chantier : seuls l'administration et les profils de paie
+  // (secrétariat, comptabilité) le voient. Il n'est donc même pas envoyé au
+  // navigateur, et les montants qui en dérivent (majoration de nuit, prime
+  // de management) sont retirés des totaux affichés — ils le trahiraient.
+  const canSeeRates = tenant.isGlobalAdmin || isTransverseCategory(tenant.category);
 
   // Montants fixes du chantier : communs à tout le monde, calculés une
   // seule fois (voir Chantier, saisis sur la fiche du chantier — Planning).
@@ -171,26 +177,28 @@ export async function listChantierRosterForWeek(crmId: string, chantierId: strin
     dinnerAllowance: Number(chantier.dinnerAllowance),
     travelAllowance: Number(chantier.travelAllowance),
     maskBonus: Number(chantier.maskBonus),
-    managementBonus: Number(chantier.managementBonus),
     zoneBonus: Number(chantier.zoneBonus),
     postBonus: Number(chantier.postBonus),
     mealAllowance: Number(chantier.mealAllowance),
-    clothingBonus: Number(chantier.clothingBonus),
   };
 
   const roster = assignments.map((a) => {
     const access = a.user.crmAccess[0];
     const existing = pointageByEmployee.get(a.user.id);
-    // Seules les primes propres au salarié (logement, salissure) restent
-    // des montants saisis, pré-remplis depuis ses défauts (UserCrmAccess).
+    // Logement (euros) et salissure (case) pré-remplis depuis les défauts
+    // du salarié (UserCrmAccess) ; nombres de repas choisis sur la fiche.
     const primes = existing
       ? {
           housingAllowance: Number(existing.housingAllowance),
-          dirtAllowance: Number(existing.dirtAllowance),
+          dirtAllowanceApplied: existing.dirtAllowanceApplied,
+          lunchCount: existing.lunchCount,
+          dinnerCount: existing.dinnerCount,
         }
       : {
           housingAllowance: Number(access?.defaultHousingAllowance ?? 0),
-          dirtAllowance: Number(access?.defaultDirtAllowance ?? 0),
+          dirtAllowanceApplied: Number(access?.defaultDirtAllowance ?? 0) > 0,
+          lunchCount: null,
+          dinnerCount: null,
         };
     // Les taux nuit (horaire de base + % de majoration) sont propres à
     // CHAQUE fiche, choisis par le chef de chantier — le taux horaire par
@@ -250,7 +258,8 @@ export async function listChantierRosterForWeek(crmId: string, chantierId: strin
       pointageId: existing?.id ?? null,
       days,
       primes,
-      rates,
+      rates: canSeeRates ? rates : { hourlyRate: null, nightRatePercent: rates.nightRatePercent },
+      canSeeRates,
       chantierAmounts,
       assignmentRates,
       applied,
@@ -259,7 +268,14 @@ export async function listChantierRosterForWeek(crmId: string, chantierId: strin
         gdDepl80Count: existing?.gdDepl80Count ?? 0,
       },
       comments: existing?.comments ?? "",
-      totals: computePointageTotals(days, rates, primes, chantierAmounts, assignmentRates, applied),
+      totals: computePointageTotals(
+        days,
+        canSeeRates ? rates : { ...rates, hourlyRate: 0 },
+        primes,
+        chantierAmounts,
+        assignmentRates,
+        applied
+      ),
     };
   });
 
@@ -304,14 +320,27 @@ async function loadWeekData(tenant: TenantContext, chantierId: string, weekStart
     dinnerAllowance: Number(chantier.dinnerAllowance),
     travelAllowance: Number(chantier.travelAllowance),
     maskBonus: Number(chantier.maskBonus),
-    managementBonus: Number(chantier.managementBonus),
     zoneBonus: Number(chantier.zoneBonus),
     postBonus: Number(chantier.postBonus),
     mealAllowance: Number(chantier.mealAllowance),
-    clothingBonus: Number(chantier.clothingBonus),
   };
 
   return { chantier, weekStart, weekEnd, pointages, assignmentByEmployee, chantierAmounts };
+}
+
+/** Saisies propres à la fiche (logement, salissure, nombres de repas). */
+function primesOf(p: {
+  housingAllowance: unknown;
+  dirtAllowanceApplied: boolean;
+  lunchCount: number | null;
+  dinnerCount: number | null;
+}) {
+  return {
+    housingAllowance: Number(p.housingAllowance),
+    dirtAllowanceApplied: p.dirtAllowanceApplied,
+    lunchCount: p.lunchCount,
+    dinnerCount: p.dinnerCount,
+  };
 }
 
 /** Distance/temps de trajet propres à l'affectation de ce salarié sur ce chantier. */
@@ -363,7 +392,7 @@ export async function emailEmployeeTimesheets(crmId: string, chantierId: string,
             weekNumber,
             days: toDayArray(p.days),
             rates: { hourlyRate: Number(p.hourlyRate), nightRatePercent: Number(p.nightRatePercent) },
-            primes: { housingAllowance: Number(p.housingAllowance), dirtAllowance: Number(p.dirtAllowance) },
+            primes: primesOf(p),
             chantierAmounts,
             assignmentRates: assignmentRatesOf(assignmentByEmployee.get(p.employeeId)),
             applied: {
@@ -505,7 +534,7 @@ async function depositEmployeeTimesheetsFor(
         weekNumber,
         days: toDayArray(p.days),
         rates: { hourlyRate: Number(p.hourlyRate), nightRatePercent: Number(p.nightRatePercent) },
-        primes: { housingAllowance: Number(p.housingAllowance), dirtAllowance: Number(p.dirtAllowance) },
+        primes: primesOf(p),
         chantierAmounts,
         assignmentRates: assignmentRatesOf(assignmentByEmployee.get(p.employeeId)),
         applied: {

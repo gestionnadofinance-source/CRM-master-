@@ -372,17 +372,6 @@ export function PlanningClient({
                 />
               </div>
               <div>
-                <Label htmlFor="managementBonus">Prime management (€)</Label>
-                <Input
-                  id="managementBonus"
-                  name="managementBonus"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  defaultValue={editing ? Number(editing.managementBonus) : 0}
-                />
-              </div>
-              <div>
                 <Label htmlFor="zoneBonus">Prime zone (€)</Label>
                 <Input
                   id="zoneBonus"
@@ -413,17 +402,6 @@ export function PlanningClient({
                   step="0.01"
                   min="0"
                   defaultValue={editing ? Number(editing.mealAllowance) : 9.81}
-                />
-              </div>
-              <div>
-                <Label htmlFor="clothingBonus">Prime habillage (€)</Label>
-                <Input
-                  id="clothingBonus"
-                  name="clothingBonus"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  defaultValue={editing ? Number(editing.clothingBonus) : 0}
                 />
               </div>
             </div>

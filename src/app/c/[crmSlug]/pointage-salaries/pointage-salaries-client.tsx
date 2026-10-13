@@ -303,17 +303,21 @@ function EntryForm({
   onCancel: () => void;
 }) {
   const [days, setDays] = useState(entry.days);
-  // Seules les primes propres au salarié restent des montants saisis.
+  // Logement (euros), salissure (case) et nombres de repas : propres à la fiche.
   const [primes, setPrimes] = useState(entry.primes);
   // Grands déplacements : un NOMBRE par barème, pas un montant — Silae
   // applique lui-même le barème (voir src/server/silae/rubriques.ts).
   const [grandsDeplacements, setGrandsDeplacements] = useState(entry.grandsDeplacements);
-  const [hourlyRate, setHourlyRate] = useState(entry.rates.hourlyRate);
+  // Le taux horaire n'arrive dans le navigateur que pour l'administration et
+  // les profils de paie : le chef de chantier ne le voit ni ne le modifie.
+  const canSeeRates = entry.canSeeRates;
+  const [hourlyRate, setHourlyRate] = useState(entry.rates.hourlyRate ?? 0);
   const [nightRatePercent, setNightRatePercent] = useState(entry.rates.nightRatePercent);
-  // Cases à cocher : le montant vient du chantier (les 7 premières) ou de
-  // l'affectation (km/heures de trajet) — jamais saisi ici. Rien n'est
-  // pré-coché par défaut, c'est au chef de chantier de choisir.
+  // Cases à cocher : le montant vient du chantier ou de l'affectation —
+  // jamais saisi ici. Rien n'est pré-coché par défaut, c'est au chef de
+  // chantier de choisir.
   const [applied, setApplied] = useState(entry.applied);
+  const [housingChecked, setHousingChecked] = useState(entry.primes.housingAllowance > 0);
   const [comments, setComments] = useState(entry.comments);
 
   function setHour(dayIndex: number, field: (typeof HOUR_FIELDS)[number]["key"], value: string) {
@@ -326,9 +330,20 @@ function EntryForm({
 
   const totalNuit = days.reduce((s, d) => s + (d.nuit || 0), 0);
   const daysWorked = days.filter((d) => d.normal + d.matin + d.apresMidi + d.nuit > 0).length;
-  const nightBonus = totalNuit * hourlyRate * (nightRatePercent / 100);
-  const lunchTotal = applied.lunchAllowanceApplied ? daysWorked * entry.chantierAmounts.lunchAllowance : 0;
-  const dinnerTotal = applied.dinnerAllowanceApplied ? daysWorked * entry.chantierAmounts.dinnerAllowance : 0;
+  // Nombre de repas : celui choisi, plafonné aux jours travaillés ; une
+  // fiche antérieure à ce choix (null) compte un repas par jour travaillé.
+  const lunchCount = applied.lunchAllowanceApplied ? Math.min(primes.lunchCount ?? daysWorked, daysWorked) : 0;
+  const dinnerCount = applied.dinnerAllowanceApplied ? Math.min(primes.dinnerCount ?? daysWorked, daysWorked) : 0;
+
+  function toggleMeal(key: "lunchAllowanceApplied" | "dinnerAllowanceApplied", countKey: "lunchCount" | "dinnerCount") {
+    // Cocher propose un repas par jour travaillé, modifiable ensuite.
+    if (!applied[key]) setPrimes((prev) => ({ ...prev, [countKey]: daysWorked }));
+    toggle(key);
+  }
+
+  const nightBonus = canSeeRates ? totalNuit * hourlyRate * (nightRatePercent / 100) : 0;
+  const lunchTotal = lunchCount * entry.chantierAmounts.lunchAllowance;
+  const dinnerTotal = dinnerCount * entry.chantierAmounts.dinnerAllowance;
   const travelTotal = applied.travelAllowanceApplied ? daysWorked * entry.chantierAmounts.travelAllowance : 0;
   const kmTotal = applied.kmReimbursementApplied
     ? daysWorked * entry.assignmentRates.distanceKm * entry.assignmentRates.kmRate
@@ -336,15 +351,21 @@ function EntryForm({
   const travelHoursTotal = applied.travelHoursReimbursementApplied
     ? daysWorked * entry.assignmentRates.travelDurationHours * entry.assignmentRates.travelHourlyRate
     : 0;
-  const maskTotal = applied.maskBonusApplied ? entry.chantierAmounts.maskBonus : 0;
-  const managementTotal = applied.managementBonusApplied ? entry.chantierAmounts.managementBonus : 0;
-  const zoneTotal = applied.zoneBonusApplied ? entry.chantierAmounts.zoneBonus : 0;
-  const postTotal = applied.postBonusApplied ? entry.chantierAmounts.postBonus : 0;
+  // Masque, zone, poste et management : par jour travaillé.
+  const maskTotal = applied.maskBonusApplied ? daysWorked * entry.chantierAmounts.maskBonus : 0;
+  const managementTotal =
+    canSeeRates && applied.managementBonusApplied ? daysWorked * (Math.round(hourlyRate * 50) / 100) : 0;
+  const zoneTotal = applied.zoneBonusApplied ? daysWorked * entry.chantierAmounts.zoneBonus : 0;
+  const postTotal = applied.postBonusApplied ? daysWorked * entry.chantierAmounts.postBonus : 0;
   const mealTotal = applied.mealAllowanceApplied ? daysWorked * entry.chantierAmounts.mealAllowance : 0;
-  const clothingTotal = applied.clothingBonusApplied ? entry.chantierAmounts.clothingBonus : 0;
+  const housing = housingChecked ? primes.housingAllowance : 0;
   const indemnitiesTotal = lunchTotal + dinnerTotal + travelTotal + kmTotal + travelHoursTotal + mealTotal;
-  const primesTotal =
-    primes.housingAllowance + primes.dirtAllowance + maskTotal + managementTotal + zoneTotal + postTotal + clothingTotal;
+  // Habillage et salissure sont des unités : ils n'entrent pas dans les euros.
+  const primesTotal = housing + maskTotal + managementTotal + zoneTotal + postTotal;
+  const unites = [
+    applied.clothingBonusApplied ? "habillage 1" : null,
+    primes.dirtAllowanceApplied ? "salissure 1" : null,
+  ].filter(Boolean);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -352,9 +373,12 @@ function EntryForm({
     fd.set("employeeId", entry.employeeId);
     fd.set("weekStart", weekStartIso);
     fd.set("days", JSON.stringify(days));
-    fd.set("housingAllowance", String(primes.housingAllowance));
-    fd.set("dirtAllowance", String(primes.dirtAllowance));
-    fd.set("hourlyRate", String(hourlyRate));
+    fd.set("housingAllowance", String(housing));
+    fd.set("dirtAllowanceApplied", String(primes.dirtAllowanceApplied));
+    if (applied.lunchAllowanceApplied) fd.set("lunchCount", String(lunchCount));
+    if (applied.dinnerAllowanceApplied) fd.set("dinnerCount", String(dinnerCount));
+    // Jamais envoyé par le chef de chantier — et ignoré par le serveur s'il l'était.
+    if (canSeeRates) fd.set("hourlyRate", String(hourlyRate));
     fd.set("nightRatePercent", String(nightRatePercent));
     fd.set("lunchAllowanceApplied", String(applied.lunchAllowanceApplied));
     fd.set("dinnerAllowanceApplied", String(applied.dinnerAllowanceApplied));
@@ -413,17 +437,19 @@ function EntryForm({
       </div>
 
       <div className="flex flex-wrap gap-4">
-        <div>
-          <Label className="text-xs">Taux horaire de base (€)</Label>
-          <Input
-            type="number"
-            min={0}
-            step={0.1}
-            value={hourlyRate}
-            onChange={(e) => setHourlyRate(Number(e.target.value) || 0)}
-            className="max-w-[180px]"
-          />
-        </div>
+        {canSeeRates && (
+          <div>
+            <Label className="text-xs">Taux horaire de base (€)</Label>
+            <Input
+              type="number"
+              min={0}
+              step={0.1}
+              value={hourlyRate}
+              onChange={(e) => setHourlyRate(Number(e.target.value) || 0)}
+              className="max-w-[180px]"
+            />
+          </div>
+        )}
         <div>
           <Label className="text-xs">Majoration nuit (% — laisser à 0 pour ne rien facturer)</Label>
           <Input
@@ -440,19 +466,25 @@ function EntryForm({
       <div>
         <p className="mb-2 text-xs font-medium text-text">Indemnités du chantier (cocher celles qui s&apos;appliquent)</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <CheckboxRow
+          <CountCheckboxRow
             label="Repas midi"
-            amount={entry.chantierAmounts.lunchAllowance > 0 ? `${formatEur(entry.chantierAmounts.lunchAllowance)}/jour` : "non configuré sur le chantier"}
+            amount={entry.chantierAmounts.lunchAllowance > 0 ? `${formatEur(entry.chantierAmounts.lunchAllowance)}/repas` : "non configuré sur le chantier"}
             checked={applied.lunchAllowanceApplied}
             disabled={entry.chantierAmounts.lunchAllowance === 0}
-            onChange={() => toggle("lunchAllowanceApplied")}
+            onChange={() => toggleMeal("lunchAllowanceApplied", "lunchCount")}
+            count={lunchCount}
+            max={daysWorked}
+            onCountChange={(n) => setPrimes({ ...primes, lunchCount: n })}
           />
-          <CheckboxRow
+          <CountCheckboxRow
             label="Repas soir"
-            amount={entry.chantierAmounts.dinnerAllowance > 0 ? `${formatEur(entry.chantierAmounts.dinnerAllowance)}/jour` : "non configuré sur le chantier"}
+            amount={entry.chantierAmounts.dinnerAllowance > 0 ? `${formatEur(entry.chantierAmounts.dinnerAllowance)}/repas` : "non configuré sur le chantier"}
             checked={applied.dinnerAllowanceApplied}
             disabled={entry.chantierAmounts.dinnerAllowance === 0}
-            onChange={() => toggle("dinnerAllowanceApplied")}
+            onChange={() => toggleMeal("dinnerAllowanceApplied", "dinnerCount")}
+            count={dinnerCount}
+            max={daysWorked}
+            onCountChange={(n) => setPrimes({ ...primes, dinnerCount: n })}
           />
           <CheckboxRow
             label="Grand déplacement"
@@ -495,15 +527,61 @@ function EntryForm({
 
       <div>
         <p className="mb-2 text-xs font-medium text-text">Primes</p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-          <div>
-            <Label className="text-xs">Prime logement (€)</Label>
-            <Input type="number" min={0} step={0.5} value={primes.housingAllowance} onChange={(e) => setPrimes({ ...primes, housingAllowance: Number(e.target.value) || 0 })} />
-          </div>
-          <div>
-            <Label className="text-xs">Prime salissure (€)</Label>
-            <Input type="number" min={0} step={0.5} value={primes.dirtAllowance} onChange={(e) => setPrimes({ ...primes, dirtAllowance: Number(e.target.value) || 0 })} />
-          </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <AmountCheckboxRow
+            label="Prime logement"
+            hint="1 fois / semaine"
+            checked={housingChecked}
+            onChange={() => setHousingChecked(!housingChecked)}
+            amount={primes.housingAllowance}
+            onAmountChange={(v) => setPrimes({ ...primes, housingAllowance: v })}
+          />
+          <CheckboxRow
+            label="Prime salissure"
+            amount="1 unité / semaine"
+            checked={primes.dirtAllowanceApplied}
+            disabled={false}
+            onChange={() => setPrimes({ ...primes, dirtAllowanceApplied: !primes.dirtAllowanceApplied })}
+          />
+          <CheckboxRow
+            label="Prime habillage"
+            amount="1 unité / semaine"
+            checked={applied.clothingBonusApplied}
+            disabled={false}
+            onChange={() => toggle("clothingBonusApplied")}
+          />
+          <CheckboxRow
+            label="Prime management"
+            amount={
+              canSeeRates
+                ? `50 % du taux horaire/jour (${formatEur(Math.round(hourlyRate * 50) / 100)})`
+                : "50 % du taux horaire/jour, calculée automatiquement"
+            }
+            checked={applied.managementBonusApplied}
+            disabled={false}
+            onChange={() => toggle("managementBonusApplied")}
+          />
+          <CheckboxRow
+            label="Prime de zone"
+            amount={entry.chantierAmounts.zoneBonus > 0 ? `${formatEur(entry.chantierAmounts.zoneBonus)}/jour` : "non configurée sur le chantier"}
+            checked={applied.zoneBonusApplied}
+            disabled={entry.chantierAmounts.zoneBonus === 0}
+            onChange={() => toggle("zoneBonusApplied")}
+          />
+          <CheckboxRow
+            label="Prime de masque"
+            amount={entry.chantierAmounts.maskBonus > 0 ? `${formatEur(entry.chantierAmounts.maskBonus)}/jour` : "non configurée sur le chantier"}
+            checked={applied.maskBonusApplied}
+            disabled={entry.chantierAmounts.maskBonus === 0}
+            onChange={() => toggle("maskBonusApplied")}
+          />
+          <CheckboxRow
+            label="Prime de poste"
+            amount={entry.chantierAmounts.postBonus > 0 ? `${formatEur(entry.chantierAmounts.postBonus)}/jour` : "non configurée sur le chantier"}
+            checked={applied.postBonusApplied}
+            disabled={entry.chantierAmounts.postBonus === 0}
+            onChange={() => toggle("postBonusApplied")}
+          />
         </div>
         <p className="mb-2 mt-4 text-xs font-medium text-text">
           Grands déplacements <span className="font-normal text-muted">(nombre de jours, pas un montant)</span>
@@ -536,43 +614,6 @@ function EntryForm({
             />
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <CheckboxRow
-            label="Prime management"
-            amount={entry.chantierAmounts.managementBonus > 0 ? formatEur(entry.chantierAmounts.managementBonus) : "non configurée sur le chantier"}
-            checked={applied.managementBonusApplied}
-            disabled={entry.chantierAmounts.managementBonus === 0}
-            onChange={() => toggle("managementBonusApplied")}
-          />
-          <CheckboxRow
-            label="Prime de zone"
-            amount={entry.chantierAmounts.zoneBonus > 0 ? formatEur(entry.chantierAmounts.zoneBonus) : "non configurée sur le chantier"}
-            checked={applied.zoneBonusApplied}
-            disabled={entry.chantierAmounts.zoneBonus === 0}
-            onChange={() => toggle("zoneBonusApplied")}
-          />
-          <CheckboxRow
-            label="Prime de masque"
-            amount={entry.chantierAmounts.maskBonus > 0 ? formatEur(entry.chantierAmounts.maskBonus) : "non configurée sur le chantier"}
-            checked={applied.maskBonusApplied}
-            disabled={entry.chantierAmounts.maskBonus === 0}
-            onChange={() => toggle("maskBonusApplied")}
-          />
-          <CheckboxRow
-            label="Prime de poste"
-            amount={entry.chantierAmounts.postBonus > 0 ? formatEur(entry.chantierAmounts.postBonus) : "non configurée sur le chantier"}
-            checked={applied.postBonusApplied}
-            disabled={entry.chantierAmounts.postBonus === 0}
-            onChange={() => toggle("postBonusApplied")}
-          />
-          <CheckboxRow
-            label="Prime habillage"
-            amount={entry.chantierAmounts.clothingBonus > 0 ? formatEur(entry.chantierAmounts.clothingBonus) : "non configurée sur le chantier"}
-            checked={applied.clothingBonusApplied}
-            disabled={entry.chantierAmounts.clothingBonus === 0}
-            onChange={() => toggle("clothingBonusApplied")}
-          />
-        </div>
       </div>
 
       <div>
@@ -581,16 +622,24 @@ function EntryForm({
       </div>
 
       <div className="rounded-md border border-border bg-bg-subtle p-3 text-xs text-muted">
-        <p>
-          Heures de nuit : {totalNuit} h × {formatEur(hourlyRate)} × {nightRatePercent}% = <strong className="text-text">{formatEur(nightBonus)}</strong>
-        </p>
+        {canSeeRates ? (
+          <p>
+            Heures de nuit : {totalNuit} h × {formatEur(hourlyRate)} × {nightRatePercent}% = <strong className="text-text">{formatEur(nightBonus)}</strong>
+          </p>
+        ) : (
+          <p>
+            Heures de nuit : {totalNuit} h, majoration {nightRatePercent}% (montant calculé à la paie)
+          </p>
+        )}
         <p>
           Indemnités ({daysWorked} jour{daysWorked > 1 ? "s" : ""} travaillé{daysWorked > 1 ? "s" : ""}) :{" "}
           <strong className="text-text">{formatEur(indemnitiesTotal)}</strong>
         </p>
         <p>
           Primes : <strong className="text-text">{formatEur(primesTotal)}</strong>
+          {!canSeeRates && applied.managementBonusApplied && " (hors prime management, calculée à la paie)"}
         </p>
+        {unites.length > 0 && <p>Unités : {unites.join(" · ")}</p>}
         <p className="mt-1 border-t border-border pt-1 text-sm text-text">
           Total frais de la semaine : <strong>{formatEur(nightBonus + indemnitiesTotal + primesTotal)}</strong>
         </p>
@@ -631,5 +680,95 @@ function CheckboxRow({
       <span className="flex-1 text-text">{label}</span>
       <span className="text-muted">{amount}</span>
     </label>
+  );
+}
+
+/** Case à cocher + nombre de fois où l'indemnité est donnée (repas). */
+function CountCheckboxRow({
+  label,
+  amount,
+  checked,
+  disabled,
+  onChange,
+  count,
+  max,
+  onCountChange,
+}: {
+  label: string;
+  amount: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: () => void;
+  count: number;
+  max: number;
+  onCountChange: (n: number) => void;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs ${disabled ? "opacity-50" : "hover:bg-bg-subtle"}`}
+    >
+      <label className={`flex flex-1 items-center gap-2 ${disabled ? "" : "cursor-pointer"}`}>
+        <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
+        <span className="flex-1 text-text">{label}</span>
+        <span className="text-muted">{amount}</span>
+      </label>
+      {checked && (
+        <div className="w-14 shrink-0">
+          <Input
+            type="number"
+            min={0}
+            max={max}
+            step={1}
+            value={count}
+            aria-label={`Nombre de ${label.toLowerCase()}`}
+            title={`Nombre de ${label.toLowerCase()} dans la semaine (au plus ${max})`}
+            onChange={(e) => onCountChange(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+            className="h-7 text-center"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Case à cocher + montant en euros saisi au même endroit (logement). */
+function AmountCheckboxRow({
+  label,
+  hint,
+  checked,
+  onChange,
+  amount,
+  onAmountChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: () => void;
+  amount: number;
+  onAmountChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs hover:bg-bg-subtle">
+      <label className="flex flex-1 cursor-pointer items-center gap-2">
+        <input type="checkbox" checked={checked} onChange={onChange} />
+        <span className="flex-1 text-text">{label}</span>
+        <span className="text-muted">{hint}</span>
+      </label>
+      {checked && (
+        <div className="w-20 shrink-0">
+          <Input
+            type="number"
+            min={0}
+            step={0.5}
+            value={amount}
+            aria-label={`${label} (€)`}
+            title={`${label} de la semaine, en euros`}
+            onChange={(e) => onAmountChange(Number(e.target.value) || 0)}
+            className="h-7 text-center"
+          />
+        </div>
+      )}
+      {checked && <span className="text-muted">€</span>}
+    </div>
   );
 }

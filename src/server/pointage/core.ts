@@ -85,13 +85,26 @@ const boolField = z
   .optional()
   .transform((v) => v === "true");
 
+const countField = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? undefined : v),
+  z.coerce.number().int("Le nombre de repas doit être un entier.").min(0).max(7).optional()
+);
+
 const upsertSchema = z.object({
   employeeId: z.string().max(MAX_ID, tooLong(MAX_ID)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
   weekStart: z.string().max(MAX_CODE, tooLong(MAX_CODE)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
   days: z.string().max(MAX_LONG, tooLong(MAX_LONG)).regex(NO_CONTROL_CHARS, CONTROL_CHARS_MESSAGE).min(1),
   housingAllowance: z.coerce.number().min(0).max(10000).default(0),
-  dirtAllowance: z.coerce.number().min(0).max(10000).default(0),
-  hourlyRate: z.coerce.number().min(0).max(1000).default(0),
+  // Salissure : une unité par semaine, cochée — plus un montant.
+  dirtAllowanceApplied: boolField,
+  // Nombre de repas midi / soir de la semaine. Absent = un par jour
+  // travaillé (comportement des fiches antérieures, et de l'API publique
+  // tant que ses clients n'envoient pas ce nombre).
+  lunchCount: countField,
+  dinnerCount: countField,
+  // Pris en compte UNIQUEMENT pour l'administration et les profils de paie :
+  // le chef de chantier ne voit ni ne fixe le taux horaire (voir plus bas).
+  hourlyRate: z.coerce.number().min(0).max(1000).optional(),
   nightRatePercent: z.coerce.number().min(0).max(500).default(0),
   lunchAllowanceApplied: boolField,
   dinnerAllowanceApplied: boolField,
@@ -162,6 +175,38 @@ export async function upsertPointageEntryCore(
     }
   }
 
+  // Un repas se rattache à un jour travaillé : on ne peut pas en accorder
+  // plus que de jours travaillés dans la semaine.
+  const joursTravailles = days.filter((d) => d.normal + d.matin + d.apresMidi + d.nuit > 0).length;
+  for (const [label, applied, count] of [
+    ["repas midi", parsed.data.lunchAllowanceApplied, parsed.data.lunchCount],
+    ["repas soir", parsed.data.dinnerAllowanceApplied, parsed.data.dinnerCount],
+  ] as const) {
+    if (applied && count !== undefined && count > joursTravailles) {
+      return {
+        ok: false,
+        error: `Nombre de ${label} (${count}) supérieur au nombre de jours travaillés (${joursTravailles}).`,
+      };
+    }
+  }
+  const lunchCount = parsed.data.lunchAllowanceApplied ? (parsed.data.lunchCount ?? null) : null;
+  const dinnerCount = parsed.data.dinnerAllowanceApplied ? (parsed.data.dinnerCount ?? null) : null;
+
+  // Taux horaire : le chef de chantier ne le voit pas et ne peut pas le
+  // fixer — même en forgeant la requête. Seuls l'administration et les
+  // profils de paie le saisissent ; sinon une nouvelle fiche prend le taux
+  // par défaut du salarié et une fiche existante garde le sien.
+  const canSetRate = tenant.isGlobalAdmin || isTransverseCategory(tenant.category);
+  const postedRate = canSetRate ? parsed.data.hourlyRate : undefined;
+  let createRate = postedRate;
+  if (createRate === undefined) {
+    const access = await prisma.userCrmAccess.findUnique({
+      where: { userId_crmId: { userId: parsed.data.employeeId, crmId: tenant.crmId } },
+      select: { defaultHourlyRate: true },
+    });
+    createRate = Number(access?.defaultHourlyRate ?? 0);
+  }
+
   // L'API publique doit pouvoir distinguer une création d'une mise à jour
   // (201 ou 200) : Prisma ne le dit pas après coup, et comparer createdAt à
   // updatedAt serait faux dès que deux écritures tombent dans la même
@@ -181,8 +226,10 @@ export async function upsertPointageEntryCore(
       weekStart,
       days: days as unknown as object,
       housingAllowance: parsed.data.housingAllowance,
-      dirtAllowance: parsed.data.dirtAllowance,
-      hourlyRate: parsed.data.hourlyRate,
+      dirtAllowanceApplied: parsed.data.dirtAllowanceApplied,
+      lunchCount,
+      dinnerCount,
+      hourlyRate: createRate,
       nightRatePercent: parsed.data.nightRatePercent,
       lunchAllowanceApplied: parsed.data.lunchAllowanceApplied,
       dinnerAllowanceApplied: parsed.data.dinnerAllowanceApplied,
@@ -203,8 +250,10 @@ export async function upsertPointageEntryCore(
       foremanId: ctx.user.id,
       days: days as unknown as object,
       housingAllowance: parsed.data.housingAllowance,
-      dirtAllowance: parsed.data.dirtAllowance,
-      hourlyRate: parsed.data.hourlyRate,
+      dirtAllowanceApplied: parsed.data.dirtAllowanceApplied,
+      lunchCount,
+      dinnerCount,
+      ...(postedRate !== undefined ? { hourlyRate: postedRate } : {}),
       nightRatePercent: parsed.data.nightRatePercent,
       lunchAllowanceApplied: parsed.data.lunchAllowanceApplied,
       dinnerAllowanceApplied: parsed.data.dinnerAllowanceApplied,

@@ -154,7 +154,7 @@ async function main(): Promise<void> {
         days: days(s.monday, s.perDay),
         hourlyRate: 12,
         nightRatePercent: 25,
-        dirtAllowance: 5,
+        dirtAllowanceApplied: true,
         lunchAllowanceApplied: true,
         managementBonusApplied: true,
       },

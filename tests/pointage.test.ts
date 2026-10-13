@@ -11,32 +11,29 @@ import {
   buildEmptyWeek,
   activeIndemnityKeys,
   activePrimeLines,
+  mealDates,
   type PointageDay,
 } from "@/server/pointage/calc";
 
 const RATES = { hourlyRate: 8, nightRatePercent: 25 }; // majoration nuit = 8 x 25% = 2€/h
-const NO_PRIMES = { housingAllowance: 0, dirtAllowance: 0 };
+const NO_PRIMES = { housingAllowance: 0, dirtAllowanceApplied: false, lunchCount: null, dinnerCount: null };
 const CHANTIER_AMOUNTS = {
   lunchAllowance: 20,
   dinnerAllowance: 20,
   travelAllowance: 50,
   maskBonus: 1,
-  managementBonus: 3,
   zoneBonus: 2,
   postBonus: 4,
   mealAllowance: 9.81,
-  clothingBonus: 6,
 };
 const ZERO_CHANTIER_AMOUNTS = {
   lunchAllowance: 0,
   dinnerAllowance: 0,
   travelAllowance: 0,
   maskBonus: 0,
-  managementBonus: 0,
   zoneBonus: 0,
   postBonus: 0,
   mealAllowance: 0,
-  clothingBonus: 0,
 };
 const ASSIGNMENT_RATES = { kmRate: 0.5, distanceKm: 100, travelHourlyRate: 15, travelDurationHours: 2 };
 const NONE_APPLIED = {
@@ -109,7 +106,7 @@ describe("computePointageTotals", () => {
     expect(totals.travelHoursTotal).toBe(60); // 2 jours x 2h x 15€
   });
 
-  it("compte masque/zone/poste PAR JOUR travaillé, et management/habillage en forfait hebdomadaire", () => {
+  it("compte masque/zone/poste/management PAR JOUR travaillé, et l'habillage en unité hebdomadaire", () => {
     const days = emptyDays();
     days[0]!.normal = 8;
     days[1]!.normal = 8;
@@ -119,9 +116,67 @@ describe("computePointageTotals", () => {
     expect(totals.maskTotal).toBe(3); // 1 × 3
     expect(totals.zoneTotal).toBe(6); // 2 × 3
     expect(totals.postTotal).toBe(12); // 4 × 3
-    // Forfaitaires à la semaine : inchangées quel que soit le nombre de jours.
-    expect(totals.managementTotal).toBe(3);
-    expect(totals.clothingTotal).toBe(6);
+    // Management : 50 % du taux horaire (8 €) par jour, soit 4 € × 3 jours.
+    expect(totals.managementTotal).toBe(12);
+    // Habillage : une UNITÉ par semaine, jamais des euros.
+    expect(totals.clothingUnits).toBe(1);
+  });
+
+  it("management : 50 % du taux horaire arrondi au centime, puis multiplié par les jours", () => {
+    const days = emptyDays();
+    for (let i = 0; i < 5; i++) days[i]!.normal = 7;
+    // 12,35 × 50 % = 6,175 → 6,18 par jour ; × 5 = 30,90 (et non 30,88).
+    const totals = computePointageTotals(days, { hourlyRate: 12.35, nightRatePercent: 0 }, NO_PRIMES, ZERO_CHANTIER_AMOUNTS, ASSIGNMENT_RATES, {
+      ...NONE_APPLIED,
+      managementBonusApplied: true,
+    });
+    expect(totals.managementTotal).toBe(30.9);
+  });
+
+  it("repas midi / soir : le NOMBRE choisi par le chef de chantier, pas les jours travaillés", () => {
+    const days = emptyDays();
+    for (let i = 0; i < 5; i++) days[i]!.normal = 7; // 5 jours travaillés
+    const totals = computePointageTotals(
+      days,
+      RATES,
+      { ...NO_PRIMES, lunchCount: 3, dinnerCount: 1 },
+      CHANTIER_AMOUNTS,
+      ASSIGNMENT_RATES,
+      { ...NONE_APPLIED, lunchAllowanceApplied: true, dinnerAllowanceApplied: true }
+    );
+    expect(totals.lunchCount).toBe(3);
+    expect(totals.lunchTotal).toBe(60); // 3 × 20
+    expect(totals.dinnerCount).toBe(1);
+    expect(totals.dinnerTotal).toBe(20);
+  });
+
+  it("repas : une fiche antérieure (nombre absent) garde un repas par jour travaillé", () => {
+    const days = emptyDays();
+    for (let i = 0; i < 4; i++) days[i]!.normal = 7;
+    const totals = computePointageTotals(days, RATES, NO_PRIMES, CHANTIER_AMOUNTS, ASSIGNMENT_RATES, {
+      ...NONE_APPLIED,
+      lunchAllowanceApplied: true,
+    });
+    expect(totals.lunchCount).toBe(4);
+  });
+
+  it("repas : rattachés aux premiers jours travaillés, jamais à un jour chômé", () => {
+    const days = emptyDays(); // lundi 17/08/2026
+    days[1]!.normal = 7; // mardi
+    days[3]!.normal = 7; // jeudi
+    days[4]!.normal = 7; // vendredi
+    expect(mealDates(days, 2)).toEqual(["2026-08-18", "2026-08-20"]);
+    expect(mealDates(days, null)).toEqual(["2026-08-18", "2026-08-20", "2026-08-21"]);
+    expect(mealDates(days, 0)).toEqual([]);
+  });
+
+  it("salissure : une unité par semaine cochée, hors des euros", () => {
+    const days = emptyDays();
+    days[0]!.normal = 8;
+    const totals = computePointageTotals(days, RATES, { ...NO_PRIMES, dirtAllowanceApplied: true }, ZERO_CHANTIER_AMOUNTS, ASSIGNMENT_RATES, NONE_APPLIED);
+    expect(totals.dirtUnits).toBe(1);
+    expect(totals.primesTotal).toBe(0);
+    expect(totals.grandTotal).toBe(0);
   });
 
   it("computes the meal allowance (repas) as amount x days worked, only when checked, like lunch/dinner/travel", () => {
@@ -135,12 +190,13 @@ describe("computePointageTotals", () => {
     expect(totals.mealTotal).toBe(19.62); // 2 jours x 9.81€
   });
 
-  it("sums housing/dirt (manual) with the flat chantier bonuses (incl. clothing) into primesTotal, and folds everything (incl. meal) into grandTotal", () => {
+  it("additionne en euros logement + primes journalières (habillage et salissure, en unités, en sont exclus), et tout dans grandTotal", () => {
     const days = emptyDays();
     days[0]!.normal = 8;
-    const primes = { housingAllowance: 10, dirtAllowance: 5 };
+    const primes = { ...NO_PRIMES, housingAllowance: 10, dirtAllowanceApplied: true };
     const totals = computePointageTotals(days, RATES, primes, CHANTIER_AMOUNTS, ASSIGNMENT_RATES, ALL_APPLIED);
-    expect(totals.primesTotal).toBe(10 + 5 + 1 + 3 + 2 + 4 + 6);
+    // logement 10 + masque 1 + management 4 (50 % de 8 €) + zone 2 + poste 4
+    expect(totals.primesTotal).toBe(10 + 1 + 4 + 2 + 4);
     expect(totals.grandTotal).toBe(
       totals.nightBonusAmount +
         totals.lunchTotal +
@@ -184,7 +240,7 @@ describe("activeIndemnityKeys / activePrimeLines (rien n'apparaît sur le PDF sa
   });
 
   it("hides every prime line left at 0/unchecked and keeps only the ones actually due", () => {
-    const primes = { housingAllowance: 12, dirtAllowance: 0 };
+    const primes = { ...NO_PRIMES, housingAllowance: 12 };
     const days = emptyDays();
     days[0]!.normal = 8; // 1 jour : la prime masque (journalière) vaut alors 1 × 1
     const totals = computePointageTotals(days, RATES, primes, CHANTIER_AMOUNTS, ASSIGNMENT_RATES, {
@@ -192,8 +248,8 @@ describe("activeIndemnityKeys / activePrimeLines (rien n'apparaît sur le PDF sa
       maskBonusApplied: true,
     });
     expect(activePrimeLines(primes, totals)).toEqual([
-      { key: "housingAllowance", amount: 12 },
-      { key: "maskBonus", amount: 1 },
+      { key: "housingAllowance", amount: 12, unit: "eur" },
+      { key: "maskBonus", amount: 1, unit: "eur" },
     ]);
   });
 

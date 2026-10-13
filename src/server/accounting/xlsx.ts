@@ -35,11 +35,15 @@ export interface AccountingWeekInput {
   isoWeek: number;
   days: AccountingDay[]; // 7 entrées, lundi en premier
   housingAllowance: number;
-  lunchAllowance: number;
-  dinnerAllowance: number;
+  /** Jours (yyyy-mm-dd) portant un repas midi / soir : le nombre choisi par
+   * le chef de chantier, rattaché aux premiers jours travaillés (mealDates). */
+  lunchDates: string[];
+  dinnerDates: string[];
   mealAllowance: number;
-  managementBonus: number;
-  clothingBonus: number;
+  /** Prime de management par jour travaillé (50 % du taux horaire), 0 si non cochée. */
+  managementPerDay: number;
+  /** Prime d'habillage : une UNITÉ par semaine cochée (0 ou 1), pas des euros. */
+  clothingUnits: number;
   postBonus: number;
   maskBonus: number;
   zoneBonus: number;
@@ -331,13 +335,15 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
       // Repas : le classeur compte des OCCURRENCES, il ne porte pas de
       // montants — le tarif est dans l'intitulé de la colonne (« repas midi
       // 20 », « repas 9,81 »). Y écrire des euros doublait la paie.
-      if (worked && week.lunchAllowance > 0) ws.getCell(r, 13).value = 1; // M repas midi
-      if (worked && week.dinnerAllowance > 0) ws.getCell(r, 14).value = 1; // N repas soir
+      if (worked && week.lunchDates.includes(d.date)) ws.getCell(r, 13).value = 1; // M repas midi
+      if (worked && week.dinnerDates.includes(d.date)) ws.getCell(r, 14).value = 1; // N repas soir
       if (worked && week.mealAllowance > 0) ws.getCell(r, 15).value = 1; // O repas 9,81
       // Primes journalières : poste, masque et zone se comptent par jour
       // travaillé, pas une fois par semaine.
       if (worked && week.postBonus > 0) ws.getCell(r, 21).value = round2(week.postBonus); // U poste
       if (worked && week.maskBonus > 0) ws.getCell(r, 22).value = round2(week.maskBonus); // V masque
+      // Management : 50 % du taux horaire par jour travaillé.
+      if (worked && week.managementPerDay > 0) ws.getCell(r, 19).value = round2(week.managementPerDay); // S management
       if (worked && week.travelAllowance > 0) ws.getCell(r, 24).value = round2(week.travelAllowance); // X voyage
       if (worked && week.zoneBonus > 0) ws.getCell(r, 25).value = round2(week.zoneBonus); // Y zone
       if (worked) {
@@ -356,9 +362,8 @@ export async function buildAccountingWorkbook(input: AccountingExportInput): Pro
     const anchor = firstWorkedRowThisWeek ?? row;
     if (weekOwningMonth(week.days) === moisDePaie) {
       if (week.housingAllowance > 0) ws.getCell(anchor, 18).value = round2(week.housingAllowance); // R logement
-      if (week.managementBonus > 0) ws.getCell(anchor, 19).value = round2(week.managementBonus); // S management
-      // Habillage : un MONTANT en euros, forfaitaire à la semaine.
-      if (week.clothingBonus > 0) ws.getCell(anchor, 20).value = round2(week.clothingBonus); // T prime habillage
+      // Habillage : une UNITÉ par semaine, pas un montant.
+      if (week.clothingUnits > 0) ws.getCell(anchor, 20).value = week.clothingUnits; // T prime habillage
       if (week.gdDepl53Count > 0) ws.getCell(anchor, 16).value = week.gdDepl53Count; // P gd depl 53
       if (week.gdDepl80Count > 0) ws.getCell(anchor, 17).value = week.gdDepl80Count; // Q 80
     }

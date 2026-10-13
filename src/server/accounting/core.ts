@@ -1,6 +1,7 @@
 import "server-only";
 import { getISOWeek } from "date-fns";
 import type { Pointage, Chantier, ChantierAssignment } from "@prisma/client";
+import { mealDates, managementDailyAmount } from "@/server/pointage/calc";
 import { buildAccountingWorkbook, type AccountingWeekInput, type AccountingDay, type AccountingExportInput } from "@/server/accounting/xlsx";
 
 /**
@@ -21,23 +22,24 @@ export function toDayArray(value: unknown): AccountingDay[] {
   }));
 }
 
-/** Une fiche de pointage → une semaine du classeur. Le montant d'une prime
- * n'est repris que si la case correspondante est cochée ; il vient toujours
- * du chantier (ou de l'affectation pour les km), jamais de la fiche. */
+/** Une fiche de pointage → une semaine du classeur. Une prime n'est reprise
+ * que si la case correspondante est cochée ; son montant vient du chantier
+ * (ou de l'affectation pour les km, du taux horaire pour le management). */
 export function pointageToAccountingWeek(
   p: Pointage,
   chantier: Chantier,
   assignment: Pick<ChantierAssignment, "distanceKm" | "kmRate"> | null
 ): AccountingWeekInput {
+  const days = toDayArray(p.days);
   return {
     isoWeek: getISOWeek(p.weekStart),
-    days: toDayArray(p.days),
+    days,
     housingAllowance: Number(p.housingAllowance),
-    lunchAllowance: p.lunchAllowanceApplied ? Number(chantier.lunchAllowance) : 0,
-    dinnerAllowance: p.dinnerAllowanceApplied ? Number(chantier.dinnerAllowance) : 0,
+    lunchDates: p.lunchAllowanceApplied ? mealDates(days, p.lunchCount) : [],
+    dinnerDates: p.dinnerAllowanceApplied ? mealDates(days, p.dinnerCount) : [],
     mealAllowance: p.mealAllowanceApplied ? Number(chantier.mealAllowance) : 0,
-    managementBonus: p.managementBonusApplied ? Number(chantier.managementBonus) : 0,
-    clothingBonus: p.clothingBonusApplied ? Number(chantier.clothingBonus) : 0,
+    managementPerDay: p.managementBonusApplied ? managementDailyAmount(Number(p.hourlyRate)) : 0,
+    clothingUnits: p.clothingBonusApplied ? 1 : 0,
     postBonus: p.postBonusApplied ? Number(chantier.postBonus) : 0,
     maskBonus: p.maskBonusApplied ? Number(chantier.maskBonus) : 0,
     zoneBonus: p.zoneBonusApplied ? Number(chantier.zoneBonus) : 0,

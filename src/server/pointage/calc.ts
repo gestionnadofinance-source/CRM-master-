@@ -21,9 +21,30 @@ export interface PointageRates {
   nightRatePercent: number;
 }
 
+/** Saisies propres à la fiche, hors heures et hors cases du chantier. */
 export interface PointagePrimes {
+  /** Prime de logement de la semaine, en euros (case cochée = montant saisi). */
   housingAllowance: number;
-  dirtAllowance: number;
+  /** Prime de salissure : une UNITÉ par semaine quand la case est cochée. */
+  dirtAllowanceApplied: boolean;
+  /**
+   * Nombre de repas midi / soir de la semaine, choisi par le chef de chantier.
+   * null = fiche antérieure à ce choix : un repas par jour travaillé.
+   */
+  lunchCount: number | null;
+  dinnerCount: number | null;
+}
+
+/** Prime de management : 50 % du taux horaire, par jour travaillé. */
+export const MANAGEMENT_RATE_OF_HOURLY = 0.5;
+
+/**
+ * Montant journalier de la prime de management, arrondi au centime AVANT
+ * d'être multiplié par les jours : c'est ce montant que porte chaque ligne de
+ * jour du classeur Excel, et l'export Silae doit retomber sur la même somme.
+ */
+export function managementDailyAmount(hourlyRate: number): number {
+  return Math.round(hourlyRate * MANAGEMENT_RATE_OF_HOURLY * 100) / 100;
 }
 
 /** Indemnités/primes fixes de CE chantier (voir Chantier), communes à tous les salariés qui y sont mobilisés. */
@@ -32,11 +53,9 @@ export interface ChantierFixedAmounts {
   dinnerAllowance: number;
   travelAllowance: number;
   maskBonus: number;
-  managementBonus: number;
   zoneBonus: number;
   postBonus: number;
   mealAllowance: number;
-  clothingBonus: number;
 }
 
 /** Données de trajet propres à CETTE affectation (voir ChantierAssignment). */
@@ -70,6 +89,9 @@ export interface PointageTotals {
   totalHours: number;
   daysWorked: number;
   nightBonusAmount: number;
+  /** Nombre de repas midi / soir effectivement accordés (0 si case décochée). */
+  lunchCount: number;
+  dinnerCount: number;
   lunchTotal: number;
   dinnerTotal: number;
   travelTotal: number;
@@ -80,7 +102,10 @@ export interface PointageTotals {
   managementTotal: number;
   zoneTotal: number;
   postTotal: number;
-  clothingTotal: number;
+  /** Habillage et salissure : des UNITÉS (une par semaine cochée), jamais des euros. */
+  clothingUnits: number;
+  dirtUnits: number;
+  /** Primes en euros uniquement. */
   primesTotal: number;
   grandTotal: number;
 }
@@ -90,15 +115,31 @@ function dayTotal(d: PointageDay): number {
 }
 
 /**
+ * Jours auxquels sont rattachés les repas accordés : les `count` premiers
+ * jours travaillés de la semaine (tous si `count` est null). Cette
+ * répartition est la seule source du nombre de repas — fiche, Excel et
+ * Silae — pour qu'une semaine à cheval sur deux mois partage ses repas de
+ * la même façon partout.
+ */
+export function mealDates(days: PointageDay[], count: number | null): string[] {
+  const worked = days.filter((d) => dayTotal(d) > 0).map((d) => d.date).sort();
+  return count === null ? worked : worked.slice(0, Math.max(0, Math.floor(count)));
+}
+
+/**
  * Calcule les totaux d'heures et les frais d'une semaine de pointage.
- * Les 9 indemnités/primes du chantier et les 2 remboursements de trajet ne
+ * Les indemnités/primes du chantier et les 2 remboursements de trajet ne
  * sont dus que si la case correspondante est cochée (`applied`) — le
  * montant lui-même vient du chantier (`chantierAmounts`) ou de
  * l'affectation (`assignmentRates`), jamais saisi sur la fiche elle-même.
- * Les indemnités journalières (repas midi/soir, grand déplacement) comme
- * les remboursements km/trajet sont multipliés par le nombre de jours
- * travaillés dans la semaine ; les primes (masque, management, zone,
- * poste, logement, salissure) sont des montants forfaitaires par semaine.
+ *
+ * Périodicités et unités (règles du gestionnaire) :
+ *   - repas midi / soir : le NOMBRE choisi par le chef de chantier ;
+ *   - panier, grand déplacement, km, trajet, masque, zone, poste : par jour
+ *     travaillé ;
+ *   - management : 50 % du taux horaire par jour travaillé ;
+ *   - logement : un montant en euros par semaine ;
+ *   - habillage, salissure : une unité par semaine.
  */
 export function computePointageTotals(
   days: PointageDay[],
@@ -115,8 +156,10 @@ export function computePointageTotals(
   const daysWorked = days.filter((d) => dayTotal(d) > 0).length;
 
   const nightBonusAmount = round2(totalNuit * rates.hourlyRate * (rates.nightRatePercent / 100));
-  const lunchTotal = applied.lunchAllowanceApplied ? round2(daysWorked * chantierAmounts.lunchAllowance) : 0;
-  const dinnerTotal = applied.dinnerAllowanceApplied ? round2(daysWorked * chantierAmounts.dinnerAllowance) : 0;
+  const lunchCount = applied.lunchAllowanceApplied ? mealDates(days, primes.lunchCount).length : 0;
+  const dinnerCount = applied.dinnerAllowanceApplied ? mealDates(days, primes.dinnerCount).length : 0;
+  const lunchTotal = round2(lunchCount * chantierAmounts.lunchAllowance);
+  const dinnerTotal = round2(dinnerCount * chantierAmounts.dinnerAllowance);
   const travelTotal = applied.travelAllowanceApplied ? round2(daysWorked * chantierAmounts.travelAllowance) : 0;
   const kmTotal = applied.kmReimbursementApplied
     ? round2(daysWorked * assignmentRates.distanceKm * assignmentRates.kmRate)
@@ -125,19 +168,19 @@ export function computePointageTotals(
     ? round2(daysWorked * assignmentRates.travelDurationHours * assignmentRates.travelHourlyRate)
     : 0;
   // Masque, zone et poste sont des primes JOURNALIÈRES : leur montant est dû
-  // pour chaque jour travaillé, comme les repas (voir le classeur Fidem, qui
-  // les porte sur chaque ligne de jour). Management et habillage restent
-  // forfaitaires à la semaine.
+  // pour chaque jour travaillé (voir le classeur Fidem, qui les porte sur
+  // chaque ligne de jour). Le management aussi, calculé sur le taux horaire.
   const maskTotal = applied.maskBonusApplied ? round2(daysWorked * chantierAmounts.maskBonus) : 0;
-  const managementTotal = applied.managementBonusApplied ? round2(chantierAmounts.managementBonus) : 0;
+  const managementTotal = applied.managementBonusApplied
+    ? round2(daysWorked * managementDailyAmount(rates.hourlyRate))
+    : 0;
   const zoneTotal = applied.zoneBonusApplied ? round2(daysWorked * chantierAmounts.zoneBonus) : 0;
   const postTotal = applied.postBonusApplied ? round2(daysWorked * chantierAmounts.postBonus) : 0;
   const mealTotal = applied.mealAllowanceApplied ? round2(daysWorked * chantierAmounts.mealAllowance) : 0;
-  const clothingTotal = applied.clothingBonusApplied ? round2(chantierAmounts.clothingBonus) : 0;
+  const clothingUnits = applied.clothingBonusApplied ? 1 : 0;
+  const dirtUnits = primes.dirtAllowanceApplied ? 1 : 0;
 
-  const primesTotal = round2(
-    primes.housingAllowance + primes.dirtAllowance + maskTotal + managementTotal + zoneTotal + postTotal + clothingTotal
-  );
+  const primesTotal = round2(primes.housingAllowance + maskTotal + managementTotal + zoneTotal + postTotal);
 
   return {
     totalNormal,
@@ -147,6 +190,8 @@ export function computePointageTotals(
     totalHours: round2(totalNormal + totalMatin + totalApresMidi + totalNuit),
     daysWorked,
     nightBonusAmount,
+    lunchCount,
+    dinnerCount,
     lunchTotal,
     dinnerTotal,
     travelTotal,
@@ -157,7 +202,8 @@ export function computePointageTotals(
     managementTotal,
     zoneTotal,
     postTotal,
-    clothingTotal,
+    clothingUnits,
+    dirtUnits,
     primesTotal,
     grandTotal: round2(
       nightBonusAmount + lunchTotal + dinnerTotal + travelTotal + kmTotal + travelHoursTotal + mealTotal + primesTotal
@@ -189,19 +235,21 @@ export function activeIndemnityKeys(
 
 export interface PrimeLine {
   key: "housingAllowance" | "dirtAllowance" | "managementBonus" | "zoneBonus" | "maskBonus" | "postBonus" | "clothingBonus";
+  /** Montant en euros, ou nombre d'unités selon `unit`. */
   amount: number;
+  unit: "eur" | "unite";
 }
 
-/** Primes effectivement dues (montant strictement positif) pour cette fiche. */
+/** Primes effectivement dues (valeur strictement positive) pour cette fiche. */
 export function activePrimeLines(primes: PointagePrimes, totals: PointageTotals): PrimeLine[] {
   const lines: PrimeLine[] = [];
-  if (primes.housingAllowance > 0) lines.push({ key: "housingAllowance", amount: primes.housingAllowance });
-  if (primes.dirtAllowance > 0) lines.push({ key: "dirtAllowance", amount: primes.dirtAllowance });
-  if (totals.managementTotal > 0) lines.push({ key: "managementBonus", amount: totals.managementTotal });
-  if (totals.zoneTotal > 0) lines.push({ key: "zoneBonus", amount: totals.zoneTotal });
-  if (totals.maskTotal > 0) lines.push({ key: "maskBonus", amount: totals.maskTotal });
-  if (totals.postTotal > 0) lines.push({ key: "postBonus", amount: totals.postTotal });
-  if (totals.clothingTotal > 0) lines.push({ key: "clothingBonus", amount: totals.clothingTotal });
+  if (primes.housingAllowance > 0) lines.push({ key: "housingAllowance", amount: primes.housingAllowance, unit: "eur" });
+  if (totals.dirtUnits > 0) lines.push({ key: "dirtAllowance", amount: totals.dirtUnits, unit: "unite" });
+  if (totals.managementTotal > 0) lines.push({ key: "managementBonus", amount: totals.managementTotal, unit: "eur" });
+  if (totals.zoneTotal > 0) lines.push({ key: "zoneBonus", amount: totals.zoneTotal, unit: "eur" });
+  if (totals.maskTotal > 0) lines.push({ key: "maskBonus", amount: totals.maskTotal, unit: "eur" });
+  if (totals.postTotal > 0) lines.push({ key: "postBonus", amount: totals.postTotal, unit: "eur" });
+  if (totals.clothingUnits > 0) lines.push({ key: "clothingBonus", amount: totals.clothingUnits, unit: "unite" });
   return lines;
 }
 

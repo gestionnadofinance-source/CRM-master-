@@ -466,8 +466,20 @@ model Pointage {
   weekStart  DateTime // lundi de la semaine concernée, normalisé à minuit
   days       Json
 
+  /// Prime de logement de la semaine, en euros (case cochée = montant saisi).
   housingAllowance Decimal @default(0) @db.Decimal(8, 2)
+  /// ANCIEN montant de salissure en euros : n'entre plus dans aucun calcul
+  /// depuis que la salissure est une unité par semaine (dirtAllowanceApplied).
+  /// Conservé pour ne rien effacer de l'historique.
   dirtAllowance    Decimal @default(0) @db.Decimal(8, 2)
+  /// Prime de salissure : une unité par semaine quand la case est cochée.
+  dirtAllowanceApplied Boolean @default(false)
+
+  /// Nombre de repas midi / soir accordés dans la semaine, choisi par le chef
+  /// de chantier (case cochée). NULL = fiche antérieure à ce choix : un repas
+  /// par jour travaillé, comme elle a été saisie.
+  lunchCount  Int?
+  dinnerCount Int?
 
   // Taux propres à CETTE fiche (salarié + semaine), choisis par le chef de
   // chantier — pré-remplis depuis UserCrmAccess.defaultHourlyRate et

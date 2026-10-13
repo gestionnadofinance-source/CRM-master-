@@ -24,11 +24,11 @@ const BASE_WEEK: Omit<AccountingWeekInput, "isoWeek" | "days"> = {
   gdDepl53Count: 0,
   gdDepl80Count: 0,
   housingAllowance: 0,
-  lunchAllowance: 0,
-  dinnerAllowance: 0,
+  lunchDates: [],
+  dinnerDates: [],
   mealAllowance: 0,
-  managementBonus: 0,
-  clothingBonus: 0,
+  managementPerDay: 0,
+  clothingUnits: 0,
   postBonus: 0,
   maskBonus: 0,
   zoneBonus: 0,
@@ -118,6 +118,23 @@ describe("buildAccountingWorkbook", () => {
     expect(ws.getCell(weekFirstRow, 11).value).toBe(50); // K lundi
   });
 
+  it("repas midi / soir : un 1 sur les seuls jours portant un repas (nombre choisi)", async () => {
+    const days = emptyWeekDays("2026-08-17");
+    for (let i = 0; i < 5; i++) days[i]!.normal = 7;
+    const week: AccountingWeekInput = {
+      ...BASE_WEEK,
+      isoWeek: 34,
+      days,
+      lunchDates: ["2026-08-17", "2026-08-18", "2026-08-19"], // 3 repas midi
+      dinnerDates: ["2026-08-17"], // 1 repas soir
+    };
+    const buffer = await buildAccountingWorkbook({ employeeName: "J", chantierName: "C", weeks: [week], sncfExpense: 0, roomDeduction: 0 });
+    const ws = await readBack(buffer);
+    const col = (c: number) => [6, 7, 8, 9, 10].map((r) => ws.getCell(r, c).value);
+    expect(col(13)).toEqual([1, 1, 1, null, null]); // M repas midi
+    expect(col(14)).toEqual([1, null, null, null, null]); // N repas soir
+  });
+
   it("distingue les forfaits hebdomadaires des primes journalières", async () => {
     const days = emptyWeekDays("2026-08-17");
     days[2]!.normal = 8; // mercredi = premier jour travaillé
@@ -126,8 +143,8 @@ describe("buildAccountingWorkbook", () => {
       isoWeek: 34,
       days,
       housingAllowance: 10,
-      managementBonus: 3,
-      clothingBonus: 15,
+      managementPerDay: 3,
+      clothingUnits: 1,
       postBonus: 4,
       maskBonus: 1,
       zoneBonus: 2,
@@ -143,9 +160,10 @@ describe("buildAccountingWorkbook", () => {
     const wednesdayRow = 6 + 2;
     // Forfaits de la SEMAINE : une seule fois, sur le premier jour travaillé.
     expect(ws.getCell(wednesdayRow, 18).value).toBe(10); // R logement
+    // Habillage : une UNITÉ par semaine, pas des euros.
+    expect(ws.getCell(wednesdayRow, 20).value).toBe(1); // T prime habillage
+    // Management : 50 % du taux horaire par jour travaillé (journalier).
     expect(ws.getCell(wednesdayRow, 19).value).toBe(3); // S management
-    // Habillage : un MONTANT en euros, forfaitaire à la semaine.
-    expect(ws.getCell(wednesdayRow, 20).value).toBe(15); // T prime habillage
     // Primes JOURNALIÈRES : leur montant se répète sur chaque jour travaillé.
     expect(ws.getCell(wednesdayRow, 21).value).toBe(4); // U poste
     expect(ws.getCell(wednesdayRow, 22).value).toBe(1); // V masque
@@ -214,7 +232,7 @@ describe("buildAccountingWorkbook", () => {
   it("leaves férié (J), compteur 8h (F), gd depl (P), voyage (X), compteur (Z) and chomés (AA) entirely blank for manual entry", async () => {
     const days = emptyWeekDays("2026-08-17");
     days[0]!.normal = 8;
-    const week: AccountingWeekInput = { ...BASE_WEEK, isoWeek: 34, days, mealAllowance: 9.81, managementBonus: 3 };
+    const week: AccountingWeekInput = { ...BASE_WEEK, isoWeek: 34, days, mealAllowance: 9.81, managementPerDay: 3 };
     const buffer = await buildAccountingWorkbook({
       employeeName: "Jean Ouvrier",
       chantierName: "Chantier Test",
@@ -351,7 +369,7 @@ describe("robustesse du découpage mensuel", () => {
     // Un classeur d'AOÛT (majorité des jours en août) qui contient AUSSI la
     // semaine lundi 27 juillet → dimanche 2 août. Cette semaine est possédée
     // par juillet (5 jours contre 2) : ses jours d'août s'affichent, mais son
-    // forfait de management doit rester au classeur de juillet — exactement la
+    // forfait de logement doit rester au classeur de juillet — exactement la
     // règle owningMonth de l'export Silae, pour que les deux fichiers imputent
     // le forfait au même mois.
     const straddle = emptyWeekDays("2026-07-27");
@@ -365,9 +383,9 @@ describe("robustesse du découpage mensuel", () => {
       employeeName: "Jean Ouvrier",
       chantierName: "Chantier Test",
       weeks: [
-        { ...BASE_WEEK, isoWeek: 31, days: straddle, managementBonus: 100 },
-        { ...BASE_WEEK, isoWeek: 32, days: semAout("2026-08-03"), managementBonus: 100 },
-        { ...BASE_WEEK, isoWeek: 33, days: semAout("2026-08-10"), managementBonus: 100 },
+        { ...BASE_WEEK, isoWeek: 31, days: straddle, housingAllowance: 100 },
+        { ...BASE_WEEK, isoWeek: 32, days: semAout("2026-08-03"), housingAllowance: 100 },
+        { ...BASE_WEEK, isoWeek: 33, days: semAout("2026-08-10"), housingAllowance: 100 },
       ],
       sncfExpense: 0,
       roomDeduction: 0,
@@ -376,12 +394,12 @@ describe("robustesse du découpage mensuel", () => {
     // La semaine à cheval n'apparaît que par ses 2 jours d'août (1er, 2).
     expect(ws.getCell(6, 3).value).toBe(1);
     expect(ws.getCell(7, 3).value).toBe(2);
-    // Son management (col S = 19) est SUPPRIMÉ : il va au classeur de juillet.
-    expect(ws.getCell(6, 19).value).toBeNull();
-    expect(ws.getCell(7, 19).value).toBeNull();
+    // Son logement (col R = 18) est SUPPRIMÉ : il va au classeur de juillet.
+    expect(ws.getCell(6, 18).value).toBeNull();
+    expect(ws.getCell(7, 18).value).toBeNull();
     // La première semaine pleinement en août (bloc suivant) porte bien le sien.
     // Bloc 1 : lignes 6-7 (2 jours) + sous-total 8. Bloc 2 démarre en 9.
-    expect(ws.getCell(9, 19).value).toBe(100);
+    expect(ws.getCell(9, 18).value).toBe(100);
   });
 });
 

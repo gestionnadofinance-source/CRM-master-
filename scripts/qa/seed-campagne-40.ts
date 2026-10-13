@@ -204,7 +204,7 @@ async function main(): Promise<void> {
           hourlyRate: 12 + (i % 5),
           nightRatePercent: 25,
           housingAllowance: i % 3 === 0 ? 40 : 0,
-          dirtAllowance: 5,
+          dirtAllowanceApplied: true,
           lunchAllowanceApplied: true,
           dinnerAllowanceApplied: profil === 3,
           travelAllowanceApplied: i % 2 === 0,
