@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea, Select, Label } from "@/components/ui/input";
 import { Card, Badge } from "@/components/ui/card";
 import { cn, formatDate, initials } from "@/lib/utils";
+import { ACCESS_CATEGORY_LABELS } from "@/lib/access-categories";
 import { useRealtimeChannel } from "@/hooks/use-realtime-channel";
 import { PlanningCalendar } from "./planning-calendar";
 
@@ -485,7 +486,7 @@ export function PlanningClient({
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.firstName} {m.lastName} (
-                      {m.category === "OUVRIER" ? (m.isForeman ? "Ouvrier — Chef de chantier" : "Ouvrier") : "Commercial"})
+                      {m.category === "OUVRIER" && m.isForeman ? "Ouvrier — Chef de chantier" : ACCESS_CATEGORY_LABELS[m.category]})
                     </option>
                   ))}
                 </Select>

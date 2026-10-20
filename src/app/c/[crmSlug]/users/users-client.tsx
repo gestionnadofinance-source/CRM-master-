@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/modal";
 import { formatDate, initials } from "@/lib/utils";
 import type { AccessCategory } from "@prisma/client";
+import { ACCESS_CATEGORY_LABELS } from "@/lib/access-categories";
 
 type Category = AccessCategory;
 type Role = "MANAGER" | "USER";
@@ -34,9 +35,8 @@ export interface CrmUserRow {
 }
 
 function categoryLabel(category: Category, isForeman: boolean): string {
-  if (category === "SECRETAIRE") return "Secrétaire";
-  if (category === "OUVRIER") return isForeman ? "Ouvrier — Chef de chantier" : "Ouvrier";
-  return "Commercial";
+  if (category === "OUVRIER" && isForeman) return "Ouvrier — Chef de chantier";
+  return ACCESS_CATEGORY_LABELS[category];
 }
 
 function categoryBadgeVariant(category: Category): "default" | "warning" | "brand" {

@@ -687,7 +687,7 @@ export function AdminVaultPanel({ crmId, members }: { crmId: string; members: Me
                     {m.firstName} {m.lastName}
                   </p>
                   <Badge variant={m.category === "OUVRIER" ? "warning" : "brand"} className="shrink-0">
-                    {m.category === "OUVRIER" ? "Ouvrier" : "Commercial"}
+                    {ACCESS_CATEGORY_LABELS[m.category]}
                   </Badge>
                 </div>
                 <span className="pl-9 text-xs text-muted sm:pl-0">
