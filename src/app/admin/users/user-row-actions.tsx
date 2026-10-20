@@ -7,6 +7,8 @@ import { disableUser, reactivateUser, regenerateUserPassword, setUserPassword } 
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/modal";
+import type { DraftResult } from "@/server/google/gmail";
+import { GmailDraftNotice } from "./gmail-draft-notice";
 
 export function UserRowActions({
   userId,
@@ -57,6 +59,7 @@ export function UserRowActions({
 function PasswordModal({ userId, open, onClose }: { userId: string; open: boolean; onClose: () => void }) {
   const [pending, startTransition] = useTransition();
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const [gmailDraft, setGmailDraft] = useState<DraftResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [customPassword, setCustomPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +67,7 @@ function PasswordModal({ userId, open, onClose }: { userId: string; open: boolea
 
   function reset() {
     setTemporaryPassword(null);
+    setGmailDraft(null);
     setCustomPassword("");
     setError(null);
     setCustomSuccess(false);
@@ -74,7 +78,10 @@ function PasswordModal({ userId, open, onClose }: { userId: string; open: boolea
     startTransition(async () => {
       const res = await regenerateUserPassword(userId);
       if (!res.ok) setError(res.error ?? "Erreur.");
-      else setTemporaryPassword(res.temporaryPassword ?? null);
+      else {
+        setTemporaryPassword(res.temporaryPassword ?? null);
+        setGmailDraft(res.gmailDraft ?? null);
+      }
     });
   }
 
@@ -124,6 +131,11 @@ function PasswordModal({ userId, open, onClose }: { userId: string; open: boolea
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                 {copied ? "Copié" : "Copier"}
               </button>
+            </div>
+          )}
+          {gmailDraft && (
+            <div className="mt-3">
+              <GmailDraftNotice draft={gmailDraft} what="Mail des nouveaux accès" />
             </div>
           )}
         </div>

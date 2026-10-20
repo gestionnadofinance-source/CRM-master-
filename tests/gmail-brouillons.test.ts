@@ -126,7 +126,7 @@ afterAll(async () => {
 
 const { GET: depart } = await import("@/app/api/google/connexion/route");
 const { GET: retour } = await import("@/app/api/google/retour/route");
-const { createUser, unlinkGmailAccount } = await import("@/server/admin/actions");
+const { createUser, unlinkGmailAccount, regenerateUserPassword } = await import("@/server/admin/actions");
 
 let adminCtx: AuthContext;
 let adminId = "";
@@ -257,6 +257,28 @@ describe("création d'un utilisateur avec un compte Gmail relié", () => {
     expect(compte.lastUsedAt).not.toBeNull();
   });
 
+  it("régénérer le mot de passe prépare aussi un brouillon, avec le NOUVEAU mot de passe", async () => {
+    const u = await prisma.user.findUniqueOrThrow({ where: { email: "__test__gm_nouveau@example.invalid" } });
+    const avant = google.brouillons.length;
+    const res = await regenerateUserPassword(u.id);
+    expect(res.ok).toBe(true);
+    expect(res.gmailDraft).toEqual({
+      ok: true,
+      openUrl: `https://mail.google.com/mail/u/admin.test%40gmail.com/#drafts?compose=m${avant + 1}`,
+    });
+    expect(etat.smtp).toEqual([]);
+
+    const raw = google.brouillons.at(-1)!;
+    expect(raw).toContain("To: __test__gm_nouveau@example.invalid");
+    expect(raw).toContain("X-Unsent: 1");
+    const sujet = Buffer.from(/Subject: =\?UTF-8\?B\?(.*?)\?=/.exec(raw)![1]!, "base64").toString("utf8");
+    expect(sujet).toBe("CRM Master — votre nouveau mot de passe provisoire");
+    const contenu = partiesDecodees(raw);
+    expect(contenu).toContain("réinitialisé par un administrateur");
+    expect(contenu).toContain(res.temporaryPassword!);
+    expect(contenu).toContain("https://crm.exemple.fr/login?email=__test__gm_nouveau%40example.invalid");
+  });
+
   it("une panne Google n'empêche pas la création : l'échec est rendu et retenu sur le compte", async () => {
     google.panneBrouillons = true;
     const res = await createUser(nouvelUtilisateur("__test__gm_panne@example.invalid"));
@@ -286,6 +308,14 @@ describe("déliaison et garde-fous", () => {
 
     const res = await createUser(nouvelUtilisateur("__test__gm_smtp@example.invalid"));
     expect(res.gmailDraft).toBeUndefined();
+    expect(etat.smtp).toEqual(["__test__gm_smtp@example.invalid"]);
+
+    // Régénération sans compte relié : comme avant, rien n'est envoyé.
+    const avant = google.brouillons.length;
+    const regen = await regenerateUserPassword(res.userId!);
+    expect(regen.ok).toBe(true);
+    expect(regen.gmailDraft).toBeUndefined();
+    expect(google.brouillons.length).toBe(avant);
     expect(etat.smtp).toEqual(["__test__gm_smtp@example.invalid"]);
   });
 

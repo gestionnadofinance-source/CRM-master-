@@ -1,10 +1,13 @@
 import "server-only";
 
 /**
- * Mail de bienvenue d'un nouvel utilisateur : un seul modèle, qu'il parte en
- * brouillon Gmail (à relire puis envoyer par l'administrateur) ou par SMTP.
+ * Mail d'accès d'un utilisateur : un seul modèle, qu'il parte en brouillon
+ * Gmail (à relire puis envoyer par l'administrateur) ou par SMTP. Deux
+ * occasions : la création du compte, et la régénération du mot de passe.
  */
 export interface WelcomeEmailInput {
+  /** "bienvenue" à la création du compte, "reinitialisation" quand l'administrateur régénère le mot de passe. */
+  kind?: "bienvenue" | "reinitialisation";
   firstName: string;
   email: string;
   temporaryPassword: string;
@@ -28,17 +31,24 @@ export function loginUrlFor(origin: string, email: string): string {
 }
 
 export function buildWelcomeEmail(input: WelcomeEmailInput): { subject: string; text: string; html: string } {
-  const subject = "Bienvenue sur CRM Master — vos accès";
+  const reinit = input.kind === "reinitialisation";
+  const subject = reinit ? "CRM Master — votre nouveau mot de passe provisoire" : "Bienvenue sur CRM Master — vos accès";
+  const intro = reinit
+    ? "Votre mot de passe CRM Master a été réinitialisé par un administrateur."
+    : "Un compte vient d'être créé pour vous sur CRM Master.";
+  const consigne = reinit
+    ? "Il vous sera demandé de choisir un nouveau mot de passe dès votre prochaine connexion."
+    : "Il vous sera demandé de choisir votre propre mot de passe dès la première connexion.";
   const text = [
     `Bonjour ${input.firstName},`,
     "",
-    "Un compte vient d'être créé pour vous sur CRM Master.",
+    intro,
     "",
     `Pour vous connecter : ${input.loginUrl}`,
     `Identifiant : ${input.email}`,
     `Mot de passe provisoire : ${input.temporaryPassword}`,
     "",
-    "Il vous sera demandé de choisir votre propre mot de passe dès la première connexion.",
+    consigne,
   ].join("\n");
 
   const url = escapeHtml(input.loginUrl);
@@ -57,13 +67,13 @@ export function buildWelcomeEmail(input: WelcomeEmailInput): { subject: string; 
             <tr>
               <td style="padding:32px;color:#111827;font-size:14px;line-height:1.5;">
                 <p style="margin:0 0 12px;">Bonjour ${escapeHtml(input.firstName)},</p>
-                <p style="margin:0 0 20px;">Un compte vient d'être créé pour vous sur CRM Master.</p>
+                <p style="margin:0 0 20px;">${escapeHtml(intro)}</p>
                 <p style="margin:0 0 24px;text-align:center;">
                   <a href="${url}" style="display:inline-block;background:#1d3cd6;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:6px;">Se connecter à CRM Master</a>
                 </p>
                 <p style="margin:0 0 4px;">Identifiant : <strong>${escapeHtml(input.email)}</strong></p>
                 <p style="margin:0 0 20px;">Mot de passe provisoire : <strong>${escapeHtml(input.temporaryPassword)}</strong></p>
-                <p style="margin:0 0 12px;">Il vous sera demandé de choisir votre propre mot de passe dès la première connexion.</p>
+                <p style="margin:0 0 12px;">${escapeHtml(consigne)}</p>
                 <p style="margin:0;color:#6b7280;font-size:12px;">Si le bouton ne fonctionne pas, copiez cette adresse dans votre navigateur :<br/>${url}</p>
               </td>
             </tr>

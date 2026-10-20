@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { createUser, type CreateUserResult } from "@/server/admin/actions";
 import { Input, Select, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, ExternalLink } from "lucide-react";
+import { Copy, Check } from "lucide-react";
+import { GmailDraftNotice } from "./gmail-draft-notice";
 import { cn } from "@/lib/utils";
 import type { AccessCategory } from "@prisma/client";
 
@@ -59,32 +60,7 @@ export function CreateUserForm({ crms, onCreated }: { crms: CrmOption[]; onCreat
             {result.emailDelivered ? " Un email récapitulatif lui a aussi été envoyé." : ""}
           </p>
         </div>
-        {result.gmailDraft?.ok && (
-          // Un brouillon n'est pas un envoi : le libellé le dit, le bouton
-          // ouvre Gmail où l'administrateur relit et envoie lui-même.
-          <div className="rounded-md border border-border bg-bg-subtle p-4 text-sm text-text">
-            <p className="font-medium">Mail de bienvenue préparé dans votre Gmail — pas encore envoyé.</p>
-            <p className="mt-1 text-muted">
-              Il contient le lien de connexion, l&apos;identifiant et le mot de passe provisoire. Relisez-le puis
-              cliquez sur « Envoyer » dans Gmail.
-            </p>
-            <a
-              href={result.gmailDraft.openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-fg hover:opacity-90"
-            >
-              <ExternalLink className="h-3.5 w-3.5" /> Ouvrir le brouillon dans Gmail
-            </a>
-          </div>
-        )}
-        {result.gmailDraft && !result.gmailDraft.ok && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-400">
-            <p className="font-medium">Le brouillon de bienvenue n&apos;a pas pu être préparé dans Gmail.</p>
-            <p className="mt-1">{result.gmailDraft.error}</p>
-            <p className="mt-1">L&apos;utilisateur est bien créé : transmettez-lui ses accès ci-dessous.</p>
-          </div>
-        )}
+        {result.gmailDraft && <GmailDraftNotice draft={result.gmailDraft} what="Mail de bienvenue" />}
         <div className="flex items-center justify-between rounded-md border border-border bg-bg-subtle px-3 py-2">
           <code className="text-sm font-semibold text-text">{result.temporaryPassword}</code>
           <button

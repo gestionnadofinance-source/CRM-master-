@@ -185,33 +185,25 @@ export async function createUser(formData: FormData): Promise<CreateUserResult> 
     return created;
   });
 
-  const welcome = buildWelcomeEmail({
-    firstName: user.firstName,
-    email: user.email,
-    temporaryPassword,
-    loginUrl: loginUrlFor(await appOrigin(), user.email),
-  });
-
   // Compte Gmail relié : le mail de bienvenue est préparé en BROUILLON dans
   // la boîte de l'administrateur, qui le relit et l'envoie lui-même. Sinon,
   // envoi SMTP s'il est configuré, comme avant. Jamais les deux : le nouvel
   // utilisateur recevrait deux fois ses accès.
-  const linked = await prisma.googleMailAccount.findUnique({ where: { userId: ctx.user.id }, select: { id: true } });
   let delivered = false;
-  let gmailDraft: DraftResult | undefined;
-  if (linked) {
-    gmailDraft = await prepareDraft(ctx.user.id, { to: user.email, ...welcome });
-    if (gmailDraft.ok) {
-      await logActivity({
-        crmId: null,
-        userId: ctx.user.id,
-        action: "gmail.welcome_draft_prepared",
-        entityType: "User",
-        entityId: user.id,
-        newValue: { to: user.email },
-      });
-    }
-  } else {
+  const gmailDraft = await prepareAccessDraft(ctx.user.id, {
+    kind: "bienvenue",
+    userId: user.id,
+    firstName: user.firstName,
+    email: user.email,
+    temporaryPassword,
+  });
+  if (!gmailDraft) {
+    const welcome = buildWelcomeEmail({
+      firstName: user.firstName,
+      email: user.email,
+      temporaryPassword,
+      loginUrl: loginUrlFor(await appOrigin(), user.email),
+    });
     ({ delivered } = await sendEmail({ to: user.email, subject: welcome.subject, html: welcome.html, text: welcome.text }));
   }
 
@@ -226,6 +218,38 @@ export async function createUser(formData: FormData): Promise<CreateUserResult> 
 
   revalidatePath("/admin/users");
   return { ok: true, userId: user.id, temporaryPassword, emailDelivered: delivered, gmailDraft };
+}
+
+/**
+ * Prépare, dans le Gmail relié par l'administrateur, le brouillon des accès
+ * d'un utilisateur. undefined si aucun compte n'est relié (l'appelant garde
+ * alors son comportement habituel).
+ */
+async function prepareAccessDraft(
+  adminUserId: string,
+  u: { kind: "bienvenue" | "reinitialisation"; userId: string; firstName: string; email: string; temporaryPassword: string }
+): Promise<DraftResult | undefined> {
+  const linked = await prisma.googleMailAccount.findUnique({ where: { userId: adminUserId }, select: { id: true } });
+  if (!linked) return undefined;
+  const message = buildWelcomeEmail({
+    kind: u.kind,
+    firstName: u.firstName,
+    email: u.email,
+    temporaryPassword: u.temporaryPassword,
+    loginUrl: loginUrlFor(await appOrigin(), u.email),
+  });
+  const result = await prepareDraft(adminUserId, { to: u.email, ...message });
+  if (result.ok) {
+    await logActivity({
+      crmId: null,
+      userId: adminUserId,
+      action: u.kind === "bienvenue" ? "gmail.welcome_draft_prepared" : "gmail.password_draft_prepared",
+      entityType: "User",
+      entityId: u.userId,
+      newValue: { to: u.email },
+    });
+  }
+  return result;
 }
 
 /**
@@ -403,7 +427,7 @@ export async function reactivateUser(userId: string): Promise<ActionResult> {
  */
 export async function regenerateUserPassword(
   userId: string
-): Promise<ActionResult & { temporaryPassword?: string }> {
+): Promise<ActionResult & { temporaryPassword?: string; gmailDraft?: DraftResult }> {
   const ctx = await requireGlobalAdmin();
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return { ok: false, error: "Utilisateur introuvable." };
@@ -424,7 +448,18 @@ export async function regenerateUserPassword(
     entityId: userId,
   });
 
-  return { ok: true, temporaryPassword };
+  // Compte Gmail relié : le mail des nouveaux accès est préparé en brouillon,
+  // comme à la création. Sans compte relié, rien n'est envoyé — comme avant :
+  // l'administrateur communique lui-même le mot de passe affiché.
+  const gmailDraft = await prepareAccessDraft(ctx.user.id, {
+    kind: "reinitialisation",
+    userId: user.id,
+    firstName: user.firstName,
+    email: user.email,
+    temporaryPassword,
+  });
+
+  return { ok: true, temporaryPassword, gmailDraft };
 }
 
 const setPasswordSchema = z.object({ password: passwordSchema });
