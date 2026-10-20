@@ -9,7 +9,7 @@ import { CrmRole, AccessCategory } from "@/server/permissions";
 import { hashPassword, generateTemporaryPassword } from "@/lib/crypto";
 import { passwordSchema, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 import { sendEmail } from "@/lib/email";
-import { buildWelcomeEmail, loginUrlFor } from "@/server/admin/welcome-email";
+import { buildWelcomeEmail, loginUrlFor, resolveAppOrigin } from "@/server/admin/welcome-email";
 import {
   prepareDraft,
   googleClientConfig,
@@ -83,25 +83,20 @@ export interface CreateUserResult extends ActionResult {
   gmailDraft?: DraftResult;
 }
 
-/**
- * Adresse publique de l'application, pour le lien du mail de bienvenue :
- * APP_URL si elle est explicitement définie, sinon le domaine par lequel
- * l'administrateur est passé — la valeur par défaut d'APP_URL (localhost)
- * donnerait un lien mort en production.
- */
+/** Adresse publique de l'application pour les liens des mails : voir resolveAppOrigin. */
 async function appOrigin(): Promise<string> {
-  if (process.env.APP_URL?.trim()) return process.env.APP_URL.trim().replace(/\/$/, "");
+  let requestOrigin: string | null = null;
   try {
     const h = await headers();
     const host = h.get("x-forwarded-host") ?? h.get("host");
     if (host) {
       const proto = h.get("x-forwarded-proto") ?? (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https");
-      return `${proto}://${host}`;
+      requestOrigin = `${proto}://${host}`;
     }
   } catch {
     // hors requête (tests) : repli ci-dessous
   }
-  return getServerEnv().APP_URL;
+  return resolveAppOrigin(process.env, requestOrigin, getServerEnv().APP_URL);
 }
 
 /**

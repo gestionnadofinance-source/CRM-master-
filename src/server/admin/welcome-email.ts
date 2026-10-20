@@ -24,6 +24,40 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Adresse publique de l'application, pour les liens envoyés par mail.
+ *
+ * Elle ne doit JAMAIS être l'adresse d'un déploiement Vercel particulier
+ * (crm-master-<code>-<équipe>.vercel.app) : celle-ci change à chaque mise en
+ * ligne et est protégée par Vercel, si bien que le salarié qui clique arrive
+ * sur une page de connexion… de Vercel. Par ordre de préférence :
+ *   1. APP_URL, si elle est définie et plausible ;
+ *   2. le domaine de PRODUCTION du projet, fourni par Vercel
+ *      (VERCEL_PROJECT_PRODUCTION_URL) — stable d'un déploiement à l'autre ;
+ *   3. l'adresse par laquelle l'administrateur est passé (hors Vercel).
+ */
+export function resolveAppOrigin(
+  env: Record<string, string | undefined>,
+  requestOrigin: string | null,
+  fallback: string
+): string {
+  const onVercel = Boolean(env.VERCEL);
+  const appUrl = env.APP_URL?.trim().replace(/\/$/, "");
+  if (appUrl) {
+    try {
+      const u = new URL(appUrl);
+      const local = /^(localhost|127\.0\.0\.1)$/.test(u.hostname);
+      const vercelSite = u.hostname === "vercel.com" || u.hostname.endsWith(".vercel.com");
+      if (/^https?:$/.test(u.protocol) && !vercelSite && !(onVercel && local)) return u.origin;
+    } catch {
+      // APP_URL illisible : on passe à la suite
+    }
+  }
+  const production = env.VERCEL_PROJECT_PRODUCTION_URL?.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (production) return `https://${production}`;
+  return requestOrigin ?? fallback;
+}
+
 export function loginUrlFor(origin: string, email: string): string {
   const url = new URL("/login", origin);
   url.searchParams.set("email", email);
