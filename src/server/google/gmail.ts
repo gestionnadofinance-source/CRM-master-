@@ -275,11 +275,12 @@ export async function prepareDraft(adminUserId: string, message: Omit<DraftMessa
       data: { lastUsedAt: new Date(), lastError: null },
     });
     // L'identifiant du MESSAGE, pas celui du brouillon : c'est lui que Gmail
-    // attend pour ouvrir le brouillon en édition. L'adresse dans le chemin
-    // ouvre le bon compte quand plusieurs sont connectés dans le navigateur.
+    // attend pour ouvrir le brouillon en édition. Le compte est choisi par
+    // ?authuser= (plusieurs comptes connectés dans le navigateur) : l'adresse
+    // placée dans le chemin (/mail/u/<adresse>/) renvoie une erreur 404 de Gmail.
     return {
       ok: true,
-      openUrl: `https://mail.google.com/mail/u/${encodeURIComponent(account.email)}/#drafts?compose=${encodeURIComponent(messageId)}`,
+      openUrl: `https://mail.google.com/mail/?authuser=${encodeURIComponent(account.email)}#drafts?compose=${encodeURIComponent(messageId)}`,
     };
   } catch (err) {
     return fail(err instanceof GoogleError ? err.message : "Erreur inattendue lors du dépôt du brouillon.");

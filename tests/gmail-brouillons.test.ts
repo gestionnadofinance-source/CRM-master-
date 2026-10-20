@@ -246,7 +246,7 @@ describe("création d'un utilisateur avec un compte Gmail relié", () => {
     expect(res.ok).toBe(true);
     expect(res.gmailDraft).toEqual({
       ok: true,
-      openUrl: `https://mail.google.com/mail/u/admin.test%40gmail.com/#drafts?compose=m${avant + 1}`,
+      openUrl: `https://mail.google.com/mail/?authuser=admin.test%40gmail.com#drafts?compose=m${avant + 1}`,
     });
     // Aucun envoi SMTP en parallèle : l'utilisateur recevrait ses accès deux fois.
     expect(etat.smtp).toEqual([]);
@@ -275,7 +275,7 @@ describe("création d'un utilisateur avec un compte Gmail relié", () => {
     expect(res.ok).toBe(true);
     expect(res.gmailDraft).toEqual({
       ok: true,
-      openUrl: `https://mail.google.com/mail/u/admin.test%40gmail.com/#drafts?compose=m${avant + 1}`,
+      openUrl: `https://mail.google.com/mail/?authuser=admin.test%40gmail.com#drafts?compose=m${avant + 1}`,
     });
     expect(etat.smtp).toEqual([]);
 
