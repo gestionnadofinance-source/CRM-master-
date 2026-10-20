@@ -37,6 +37,20 @@ function withPathnameHeader(request: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
+/**
+ * Enveloppe de l'application installable, lisible SANS session : le
+ * navigateur charge le manifeste sans cookie (il recevait sinon la page de
+ * connexion et l'application n'était jamais installable), et le service
+ * worker, les icônes et la page hors ligne doivent l'être aussi.
+ *
+ * Liste FERMÉE de chemins exacts ou de fichiers statiques : aucune page ni
+ * aucune donnée n'y figure. Ne jamais l'élargir à un préfixe de route.
+ */
+const PUBLIC_PWA_FILES = new Set(["/manifest.webmanifest", "/sw.js", "/offline.html"]);
+export function isPublicPwaAsset(pathname: string): boolean {
+  return PUBLIC_PWA_FILES.has(pathname) || /^\/icons\/[a-z0-9-]+\.png$/.test(pathname);
+}
+
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -48,7 +62,8 @@ export default function proxy(request: NextRequest) {
     // renvoyait une page HTML au lieu de la consigne, et les robots se
     // retrouvaient sans directive du tout — exactement l'inverse du but
     // recherché (voir src/app/robots.ts).
-    pathname === "/robots.txt"
+    pathname === "/robots.txt" ||
+    isPublicPwaAsset(pathname)
   ) {
     return NextResponse.next();
   }

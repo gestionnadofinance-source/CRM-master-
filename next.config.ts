@@ -37,6 +37,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Service worker : toujours relu (une mise à jour ne doit jamais
+        // rester bloquée derrière un cache HTTP), et limité à son origine.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      {
         // Ne s'applique pas aux assets statiques _next/* : en-têtes de
         // sécurité utiles seulement sur les réponses de pages/API.
         source: "/((?!_next/static|_next/image|favicon.ico).*)",

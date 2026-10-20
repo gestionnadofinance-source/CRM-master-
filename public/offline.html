@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>CRM Master — hors connexion</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        font-family: Inter, system-ui, -apple-system, sans-serif; background: #fafafb; color: #111827; padding: 24px; box-sizing: border-box; }
+      main { max-width: 420px; text-align: center; }
+      .logo { width: 56px; height: 56px; margin: 0 auto 20px; border-radius: 12px; background: #254dea; color: #fff;
+        display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px; }
+      h1 { font-size: 20px; margin: 0 0 12px; }
+      p { font-size: 14px; line-height: 1.5; color: #4b5563; margin: 0 0 12px; }
+      button { margin-top: 8px; border: 0; border-radius: 6px; background: #254dea; color: #fff; font-size: 14px;
+        font-weight: 600; padding: 10px 20px; cursor: pointer; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0f1115; color: #f3f4f6; }
+        p { color: #9ca3af; }
+        .logo, button { background: #608ffa; color: #0f1115; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="logo">CM</div>
+      <h1>Pas de connexion internet</h1>
+      <p>CRM Master a besoin d'une connexion pour afficher et enregistrer vos données. Aucune donnée n'est conservée sur cet appareil.</p>
+      <p>Vérifiez votre connexion, puis réessayez.</p>
+      <button type="button" onclick="location.reload()">Réessayer</button>
+    </main>
+  </body>
+</html>

@@ -6,6 +6,7 @@ import { logout } from "@/server/auth/actions";
 import { initials, cn } from "@/lib/utils";
 import type { SessionUser } from "@/server/auth/session";
 import { Settings, LogOut, ShieldCheck } from "lucide-react";
+import { InstallCenter, InstallMenuItem } from "@/components/pwa/install-center";
 
 export function UserMenu({ user }: { user: SessionUser }) {
   const [open, setOpen] = useState(false);
@@ -58,6 +59,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
               <ShieldCheck className="h-4 w-4" /> Administration
             </Link>
           )}
+          <InstallMenuItem onSelect={() => setOpen(false)} />
           <form action={logout}>
             <button
               type="submit"
@@ -68,6 +70,8 @@ export function UserMenu({ user }: { user: SessionUser }) {
           </form>
         </div>
       )}
+      {/* Bandeau de première visite et aide à l'installation (une fois par page authentifiée). */}
+      <InstallCenter />
     </div>
   );
 }
