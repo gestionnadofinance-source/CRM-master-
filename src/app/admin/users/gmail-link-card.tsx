@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Mail } from "lucide-react";
+import { Mail, Copy, Check } from "lucide-react";
 import { unlinkGmailAccount } from "@/server/admin/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,12 +25,15 @@ export function GmailLinkCard({
   configured,
   account,
   statut,
+  redirectUri,
 }: {
   configured: boolean;
   account: { email: string; lastError: string | null } | null;
   statut: string | null;
+  redirectUri: string;
 }) {
   const [pending, startTransition] = useTransition();
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const retour = statut ? STATUTS[statut] : undefined;
@@ -83,6 +86,29 @@ export function GmailLinkCard({
           <p className="shrink-0 text-xs text-muted">Connexion Google non configurée sur le serveur.</p>
         )}
       </div>
+      {!account && (
+        <div className="rounded-md border border-border bg-bg-subtle px-3 py-2 text-xs text-muted">
+          <p>
+            Adresse de retour à déclarer dans la console Google (ID client OAuth → « URI de redirection autorisés »),
+            exactement :
+          </p>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <code className="break-all text-sm font-semibold text-text">{redirectUri}</code>
+            <button
+              type="button"
+              className="flex shrink-0 items-center gap-1 text-xs text-muted hover:text-brand"
+              onClick={() => {
+                navigator.clipboard.writeText(redirectUri);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? "Copié" : "Copier"}
+            </button>
+          </div>
+        </div>
+      )}
       {account?.lastError && (
         <p className="text-sm text-amber-800 dark:text-amber-400">Dernier échec : {account.lastError}</p>
       )}

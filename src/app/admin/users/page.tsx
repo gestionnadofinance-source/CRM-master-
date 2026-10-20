@@ -8,7 +8,9 @@ import { listAllUsers } from "@/server/admin/queries";
 import { CreateUserButton } from "./create-user-button";
 import { UserRowActions } from "./user-row-actions";
 import { GmailLinkCard } from "./gmail-link-card";
-import { googleClientConfig } from "@/server/google/gmail";
+import { headers } from "next/headers";
+import { googleClientConfig, publicOrigin, redirectUriFor } from "@/server/google/gmail";
+import { getServerEnv } from "@/lib/env";
 
 export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ gmail?: string }> }) {
   // Voir le commentaire équivalent dans admin/page.tsx : le layout admin
@@ -35,7 +37,14 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <CreateUserButton crms={crms} />
       </div>
 
-      <GmailLinkCard configured={googleClientConfig() !== null} account={gmailAccount} statut={gmail ?? null} />
+      <GmailLinkCard
+        configured={googleClientConfig() !== null}
+        account={gmailAccount}
+        statut={gmail ?? null}
+        // Exactement celle qu'enverront les routes de liaison : à copier dans
+        // « URI de redirection autorisés » de la console Google.
+        redirectUri={redirectUriFor(publicOrigin(await headers(), getServerEnv().APP_URL))}
+      />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

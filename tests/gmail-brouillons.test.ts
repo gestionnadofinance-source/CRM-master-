@@ -198,6 +198,17 @@ describe("liaison du compte Gmail", () => {
     expect(cookie?.httpOnly).toBe(true);
   });
 
+  it("l'adresse de retour affichée à l'administrateur est exactement celle envoyée à Google", async () => {
+    const { publicOrigin, redirectUriFor } = await import("@/server/google/gmail");
+    // Derrière l'hébergeur : le domaine public arrive dans les en-têtes x-forwarded-*.
+    const entetes = { host: "interne:3000", "x-forwarded-host": "crm.exemple.fr", "x-forwarded-proto": "https" };
+    const res = await depart(new NextRequest("http://interne:3000/api/google/connexion", { headers: entetes }));
+    const envoyee = new URL(res.headers.get("location")!).searchParams.get("redirect_uri");
+    const affichee = redirectUriFor(publicOrigin(new Headers(entetes), "http://localhost:3000"));
+    expect(envoyee).toBe("https://crm.exemple.fr/api/google/retour");
+    expect(affichee).toBe(envoyee);
+  });
+
   it("refuse un retour dont l'état ne correspond pas, sans rien enregistrer", async () => {
     const fin = await relier("etat-forge-par-un-tiers");
     expect(fin.searchParams.get("gmail")).toBe("etat_invalide");

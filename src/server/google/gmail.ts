@@ -295,3 +295,17 @@ export async function prepareDraft(adminUserId: string, message: Omit<DraftMessa
 export function redirectUriFor(origin: string): string {
   return env("GOOGLE_REDIRECT_URI", `${origin}/api/google/retour`);
 }
+
+/**
+ * Adresse publique du site d'après les en-têtes de la requête — la même
+ * pour les routes de liaison et pour l'écran qui affiche l'adresse de
+ * retour à déclarer chez Google : les deux ne peuvent pas diverger.
+ */
+export function publicOrigin(h: Headers, fallback: string): string {
+  const host = h.get("x-forwarded-host")?.split(",")[0]?.trim() || h.get("host");
+  if (!host) return fallback;
+  const proto =
+    h.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https");
+  return `${proto}://${host}`;
+}

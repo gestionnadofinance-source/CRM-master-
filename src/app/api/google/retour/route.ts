@@ -8,6 +8,7 @@ import {
   fetchAccountEmail,
   googleClientConfig,
   OAUTH_STATE_COOKIE,
+  publicOrigin,
   redirectUriFor,
 } from "@/server/google/gmail";
 
@@ -17,7 +18,7 @@ import {
  * par l'écran Utilisateurs.
  */
 export async function GET(request: NextRequest) {
-  const origin = request.nextUrl.origin;
+  const origin = publicOrigin(request.headers, request.nextUrl.origin);
   const ctx = await getAuthContext();
   if (!ctx?.user.isGlobalAdmin) {
     return NextResponse.redirect(new URL("/login", origin));
