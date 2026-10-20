@@ -2,12 +2,21 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/server/auth/session";
 import { CrmRole, AccessCategory } from "@/server/permissions";
 import { hashPassword, generateTemporaryPassword } from "@/lib/crypto";
 import { passwordSchema, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
-import { sendEmail, baseEmailLayout } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
+import { buildWelcomeEmail, loginUrlFor } from "@/server/admin/welcome-email";
+import {
+  prepareDraft,
+  googleClientConfig,
+  decryptRefreshToken,
+  revokeRefreshToken,
+  type DraftResult,
+} from "@/server/google/gmail";
 import { getServerEnv } from "@/lib/env";
 import { logActivity } from "@/server/activity";
 import { computeAccessDiff } from "@/server/admin/access-diff";
@@ -70,6 +79,29 @@ export interface CreateUserResult extends ActionResult {
   userId?: string;
   temporaryPassword?: string;
   emailDelivered?: boolean;
+  /** Brouillon de bienvenue déposé dans le Gmail relié par l'administrateur (jamais envoyé). */
+  gmailDraft?: DraftResult;
+}
+
+/**
+ * Adresse publique de l'application, pour le lien du mail de bienvenue :
+ * APP_URL si elle est explicitement définie, sinon le domaine par lequel
+ * l'administrateur est passé — la valeur par défaut d'APP_URL (localhost)
+ * donnerait un lien mort en production.
+ */
+async function appOrigin(): Promise<string> {
+  if (process.env.APP_URL?.trim()) return process.env.APP_URL.trim().replace(/\/$/, "");
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    if (host) {
+      const proto = h.get("x-forwarded-proto") ?? (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https");
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // hors requête (tests) : repli ci-dessous
+  }
+  return getServerEnv().APP_URL;
 }
 
 /**
@@ -153,21 +185,35 @@ export async function createUser(formData: FormData): Promise<CreateUserResult> 
     return created;
   });
 
-  const env = getServerEnv();
-  const loginUrl = `${env.APP_URL}/login`;
-  const { delivered } = await sendEmail({
-    to: user.email,
-    subject: "Bienvenue sur CRM Master",
-    html: baseEmailLayout(
-      "Bienvenue sur CRM Master",
-      `<p>Bonjour ${user.firstName},</p>
-       <p>Un compte vient d'être créé pour vous sur CRM Master.</p>
-       <p>Identifiant : <strong>${user.email}</strong><br/>
-       Mot de passe temporaire : <strong>${temporaryPassword}</strong></p>
-       <p>Il vous sera demandé de le changer dès la première connexion.</p>
-       <p><a href="${loginUrl}" style="color:#1d3cd6;">Se connecter</a></p>`
-    ),
+  const welcome = buildWelcomeEmail({
+    firstName: user.firstName,
+    email: user.email,
+    temporaryPassword,
+    loginUrl: loginUrlFor(await appOrigin(), user.email),
   });
+
+  // Compte Gmail relié : le mail de bienvenue est préparé en BROUILLON dans
+  // la boîte de l'administrateur, qui le relit et l'envoie lui-même. Sinon,
+  // envoi SMTP s'il est configuré, comme avant. Jamais les deux : le nouvel
+  // utilisateur recevrait deux fois ses accès.
+  const linked = await prisma.googleMailAccount.findUnique({ where: { userId: ctx.user.id }, select: { id: true } });
+  let delivered = false;
+  let gmailDraft: DraftResult | undefined;
+  if (linked) {
+    gmailDraft = await prepareDraft(ctx.user.id, { to: user.email, ...welcome });
+    if (gmailDraft.ok) {
+      await logActivity({
+        crmId: null,
+        userId: ctx.user.id,
+        action: "gmail.welcome_draft_prepared",
+        entityType: "User",
+        entityId: user.id,
+        newValue: { to: user.email },
+      });
+    }
+  } else {
+    ({ delivered } = await sendEmail({ to: user.email, subject: welcome.subject, html: welcome.html, text: welcome.text }));
+  }
 
   await logActivity({
     crmId: null,
@@ -179,7 +225,31 @@ export async function createUser(formData: FormData): Promise<CreateUserResult> 
   });
 
   revalidatePath("/admin/users");
-  return { ok: true, userId: user.id, temporaryPassword, emailDelivered: delivered };
+  return { ok: true, userId: user.id, temporaryPassword, emailDelivered: delivered, gmailDraft };
+}
+
+/**
+ * Délie le compte Gmail de l'administrateur courant : l'autorisation est
+ * retirée chez Google (au mieux) et le jeton supprimé de la base.
+ */
+export async function unlinkGmailAccount(): Promise<ActionResult> {
+  const ctx = await requireGlobalAdmin();
+  const account = await prisma.googleMailAccount.findUnique({ where: { userId: ctx.user.id } });
+  if (!account) return { ok: true };
+
+  const cfg = googleClientConfig();
+  const token = cfg ? decryptRefreshToken(account.refreshTokenEncrypted, cfg.clientSecret) : null;
+  if (token) await revokeRefreshToken(token);
+  await prisma.googleMailAccount.delete({ where: { id: account.id } });
+  await logActivity({
+    crmId: null,
+    userId: ctx.user.id,
+    action: "gmail.account_unlinked",
+    entityType: "GoogleMailAccount",
+    oldValue: { email: account.email },
+  });
+  revalidatePath("/admin/users");
+  return { ok: true };
 }
 
 const updateUserSchema = z.object({

@@ -82,8 +82,28 @@ model User {
   pointagesAsEmployee    Pointage[]           @relation("PointageEmployee")
   pointagesAsForeman     Pointage[]           @relation("PointageForeman")
   createdApiKeys         ApiKey[]             @relation("ApiKeyCreatedBy")
+  googleMailAccount      GoogleMailAccount?
 
   @@index([email])
+}
+
+/// Compte Gmail relié par un administrateur, pour PRÉPARER des brouillons
+/// (mail de bienvenue des nouveaux utilisateurs) — jamais pour envoyer : la
+/// seule permission demandée à Google est gmail.compose. Voir
+/// src/server/google/gmail.ts.
+model GoogleMailAccount {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Adresse du compte relié, affichée dans l'administration.
+  email                 String
+  /// Jeton de rafraîchissement, chiffré (AES-256-GCM) — jamais en clair.
+  refreshTokenEncrypted String
+  scope                 String
+  connectedAt           DateTime  @default(now())
+  lastUsedAt            DateTime?
+  /// Dernier refus de Google, montré à l'administrateur.
+  lastError             String?
 }
 
 model Session {

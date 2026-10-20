@@ -7,16 +7,22 @@ import { formatDate, initials } from "@/lib/utils";
 import { listAllUsers } from "@/server/admin/queries";
 import { CreateUserButton } from "./create-user-button";
 import { UserRowActions } from "./user-row-actions";
+import { GmailLinkCard } from "./gmail-link-card";
+import { googleClientConfig } from "@/server/google/gmail";
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ gmail?: string }> }) {
   // Voir le commentaire équivalent dans admin/page.tsx : le layout admin
   // ne suffit pas seul à empêcher un non-admin d'atteindre cette page.
   const ctx = await requireAuth();
   if (!ctx.user.isGlobalAdmin) notFound();
 
-  const [users, crms] = await Promise.all([
+  const [users, crms, gmailAccount, { gmail }] = await Promise.all([
     listAllUsers(),
     prisma.crm.findMany({ where: { isActive: true }, orderBy: { order: "asc" }, select: { id: true, name: true } }),
+    // Le compte relié de CET administrateur : ni le jeton ni rien d'autre ne
+    // quitte le serveur, seulement l'adresse et le dernier échec.
+    prisma.googleMailAccount.findUnique({ where: { userId: ctx.user.id }, select: { email: true, lastError: true } }),
+    searchParams,
   ]);
 
   return (
@@ -28,6 +34,8 @@ export default async function AdminUsersPage() {
         </div>
         <CreateUserButton crms={crms} />
       </div>
+
+      <GmailLinkCard configured={googleClientConfig() !== null} account={gmailAccount} statut={gmail ?? null} />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

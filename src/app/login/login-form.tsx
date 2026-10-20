@@ -7,14 +7,22 @@ import { Button } from "@/components/ui/button";
 
 const initialState: ActionResult = { ok: true };
 
-export function LoginForm() {
+export function LoginForm({ defaultEmail = "" }: { defaultEmail?: string }) {
   const [state, formAction, isPending] = useActionState(loginStep1, initialState);
 
   return (
     <form action={formAction} className="space-y-4">
       <div>
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" required autoComplete="email" placeholder="vous@entreprise.fr" />
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="vous@entreprise.fr"
+          defaultValue={defaultEmail}
+        />
       </div>
       <div>
         <Label htmlFor="password">Mot de passe</Label>

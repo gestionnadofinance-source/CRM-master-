@@ -3,7 +3,7 @@ import { getAuthContext } from "@/server/auth/session";
 import { LoginForm } from "./login-form";
 import { AuthShell } from "@/components/auth-shell";
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ email?: string }> }) {
   // Revalide en base plutôt que de se fier au middleware (qui ne fait
   // qu'un contrôle léger de présence du cookie) : évite de renvoyer un
   // utilisateur déjà connecté vers le formulaire, tout en gérant
@@ -16,7 +16,8 @@ export default async function LoginPage() {
 
   return (
     <AuthShell title="Connexion" subtitle="Accédez à votre espace de gestion commerciale interne.">
-      <LoginForm />
+      {/* Le lien du mail de bienvenue arrive avec l'email déjà rempli. */}
+      <LoginForm defaultEmail={(await searchParams).email?.slice(0, 254) ?? ""} />
     </AuthShell>
   );
 }
