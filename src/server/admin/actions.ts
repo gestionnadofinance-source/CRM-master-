@@ -10,6 +10,8 @@ import { hashPassword, generateTemporaryPassword } from "@/lib/crypto";
 import { passwordSchema, CONTROL_CHARS_MESSAGE, NO_CONTROL_CHARS } from "@/lib/validation";
 import { sendEmail } from "@/lib/email";
 import { buildWelcomeEmail, loginUrlFor, resolveAppOrigin } from "@/server/admin/welcome-email";
+import { purgeTargets, purgeUsersCore } from "@/server/admin/purge-users";
+import { PURGE_CONFIRMATION } from "@/lib/purge-confirmation";
 import {
   prepareDraft,
   googleClientConfig,
@@ -245,6 +247,35 @@ async function prepareAccessDraft(
     });
   }
   return result;
+}
+
+/** Nombre de comptes que le nettoyage supprimerait, pour la confirmation. */
+export async function countUsersToPurge(): Promise<number> {
+  const ctx = await requireGlobalAdmin();
+  return prisma.user.count({ where: purgeTargets(ctx.user.id) });
+}
+
+/**
+ * Nettoyage : supprime tous les comptes sauf celui de l'administrateur qui le
+ * lance, avec leurs données et leurs fichiers (voir purgeUsersCore).
+ */
+export async function purgeAllOtherUsers(
+  confirmation: string
+): Promise<ActionResult & { deletedUsers?: number; removedFiles?: number }> {
+  const ctx = await requireGlobalAdmin();
+  if (confirmation.trim() !== PURGE_CONFIRMATION) {
+    return { ok: false, error: `Recopiez exactement « ${PURGE_CONFIRMATION} » pour confirmer.` };
+  }
+  const summary = await purgeUsersCore(ctx.user.id, purgeTargets(ctx.user.id));
+  await logActivity({
+    crmId: null,
+    userId: ctx.user.id,
+    action: "user.purge",
+    entityType: "User",
+    newValue: { deletedUsers: summary.deletedUsers, removedFiles: summary.removedFiles, emails: summary.deletedEmails },
+  });
+  revalidatePath("/admin/users");
+  return { ok: true, deletedUsers: summary.deletedUsers, removedFiles: summary.removedFiles };
 }
 
 /**

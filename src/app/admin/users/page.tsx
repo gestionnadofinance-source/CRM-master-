@@ -8,6 +8,7 @@ import { listAllUsers } from "@/server/admin/queries";
 import { CreateUserButton } from "./create-user-button";
 import { UserRowActions } from "./user-row-actions";
 import { GmailLinkCard } from "./gmail-link-card";
+import { PurgeUsersCard } from "./purge-users-card";
 import { headers } from "next/headers";
 import { googleClientConfig, publicOrigin, redirectUriFor } from "@/server/google/gmail";
 import { getServerEnv } from "@/lib/env";
@@ -111,6 +112,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
           </table>
         </div>
       </Card>
+
+      <PurgeUsersCard selfEmail={ctx.user.email} />
     </div>
   );
 }
